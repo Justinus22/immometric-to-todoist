@@ -1,119 +1,118 @@
-// Minimal Todoist API v1 wrapper (configurable base)
-// NOTE: Base URL assumed from user input; adjust if official endpoints differ.
-// Todoist unified API base (confirmed):
-// Using https://api.todoist.com/api/v1 per user confirmation.
-// Adjust with setApiBase() if future versioning changes.
-export let API_BASE = 'https://api.todoist.com/api/v1';
+/**
+ * Modern Todoist API v1 Client
+ * Minimal wrapper for essential Todoist operations
+ */
 
-export function setApiBase(newBase) {
-  API_BASE = newBase;
-  console.warn('[todoistApi] API_BASE changed to', API_BASE);
-}
+const API_BASE = 'https://api.todoist.com/api/v1';
 
-function buildHeaders(token, isJson = true) {
-  const headers = {
-    'Authorization': `Bearer ${token}`
-  };
-  if (isJson) headers['Content-Type'] = 'application/json';
-  return headers;
-}
-
-async function doFetch(path, { method = 'GET', token, body } = {}) {
-  if (!token) throw new Error('MISSING_TOKEN');
-  const url = API_BASE.replace(/\/$/, '') + path; // ensure single slash
-  const options = {
-    method,
-    headers: buildHeaders(token, method !== 'GET')
-  };
-  if (body && method !== 'GET') {
-    options.body = JSON.stringify(body);
-  }
-  let res;
-  try {
-    res = await fetch(url, options);
-  } catch (e) {
-    console.error('[todoistApi] NETWORK error', { url, method, message: e.message });
-    throw { type: 'NETWORK', message: e.message };
-  }
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    console.error('[todoistApi] HTTP error', { url, method, status: res.status, response: text });
-    throw { type: 'HTTP', status: res.status, message: text || res.statusText, url };
-  }
-  if (res.status === 204) return null;
-  // attempt json
-  try {
-    return await res.json();
-  } catch {
-    return null;
+class TodoistApiError extends Error {
+  constructor(message, type, status, url) {
+    super(message);
+    this.name = 'TodoistApiError';
+    this.type = type;
+    this.status = status;
+    this.url = url;
   }
 }
 
-function extractList(res, label) {
-  if (!res) return [];
-  if (Array.isArray(res)) return res; // pure array response
-  if (Array.isArray(res.results)) return res.results; // cursor-based envelope
-  if (label && Array.isArray(res[label])) return res[label]; // object label fallback
-  return [];
+/**
+ * Core HTTP client for Todoist API
+ */
+class TodoistClient {
+  constructor(token) {
+    this.token = token;
+  }
+
+  async request(endpoint, options = {}) {
+    if (!this.token) {
+      throw new TodoistApiError('API token required', 'AUTH');
+    }
+
+    const url = `${API_BASE}${endpoint}`;
+    const config = {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        ...(options.method !== 'GET' && { 'Content-Type': 'application/json' }),
+      },
+      ...options,
+      ...(options.body && { body: JSON.stringify(options.body) }),
+    };
+
+    try {
+      const response = await fetch(url, config);
+      
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new TodoistApiError(
+          text || response.statusText,
+          'HTTP',
+          response.status,
+          url
+        );
+      }
+
+      if (response.status === 204) return null;
+      return await response.json().catch(() => null);
+      
+    } catch (error) {
+      if (error instanceof TodoistApiError) throw error;
+      throw new TodoistApiError(error.message, 'NETWORK');
+    }
+  }
+
+  async fetchPaged(endpoint) {
+    const results = [];
+    let cursor = null;
+
+    do {
+      const separator = endpoint.includes('?') ? '&' : '?';
+      const url = cursor ? `${endpoint}${separator}cursor=${cursor}` : endpoint;
+      
+      const response = await this.request(url);
+      const batch = Array.isArray(response?.results) ? response.results : 
+                   Array.isArray(response) ? response : [];
+      
+      results.push(...batch);
+      cursor = response?.next_cursor || null;
+    } while (cursor);
+
+    return results;
+  }
+
+  async getProjects() {
+    return this.fetchPaged('/projects');
+  }
+
+  async getSections(projectId) {
+    const endpoint = projectId ? `/sections?project_id=${projectId}` : '/sections';
+    return this.fetchPaged(endpoint);
+  }
+
+  async createTask(task) {
+    return this.request('/tasks', {
+      method: 'POST',
+      body: task,
+    });
+  }
 }
 
-async function pagedFetch(path, { token }) {
-  let accumulated = [];
-  let cursor = null;
-  let first = true;
-  do {
-    const cursorSuffix = cursor ? (path.includes('?') ? `&cursor=${encodeURIComponent(cursor)}` : `?cursor=${encodeURIComponent(cursor)}`) : '';
-    const res = await doFetch(path + cursorSuffix, { token });
-    const batch = extractList(res);
-    accumulated = accumulated.concat(batch);
-    cursor = res && res.next_cursor ? res.next_cursor : null;
-    first = false;
-  } while (cursor);
-  return accumulated;
-}
-
+/**
+ * Legacy exports for backward compatibility
+ */
 export async function getProjects(token) {
-  try {
-    const list = await pagedFetch('/projects', { token });
-    if (!list.length) console.warn('[todoistApi] Empty projects list');
-    return list;
-  } catch (e) {
-    console.error('[todoistApi] getProjects failed', e);
-    throw e;
-  }
+  const client = new TodoistClient(token);
+  return client.getProjects();
 }
 
 export async function getSections(token, projectId) {
-  // Assuming sections endpoint supports project_id query param as in previous REST.
-  const query = projectId ? `/sections?project_id=${encodeURIComponent(projectId)}` : '/sections';
-  try {
-    const list = await pagedFetch(query, { token });
-    if (!list.length) console.warn('[todoistApi] Empty sections list for project', projectId);
-    return list;
-  } catch (e) {
-    console.error('[todoistApi] getSections failed', e);
-    throw e;
-  }
+  const client = new TodoistClient(token);
+  return client.getSections(projectId);
 }
 
 export async function createTask(token, payload) {
-  // Expecting /tasks POST.
-  return await doFetch('/tasks', { method: 'POST', token, body: payload });
+  const client = new TodoistClient(token);
+  return client.createTask(payload);
 }
 
-// Simple diagnostic helper to attempt a fallback chain of bases.
-export async function testBases(token, path = '/projects') {
-  const candidates = [API_BASE]; // simplified now that base is confirmed.
-  const results = [];
-  for (const base of candidates) {
-    const full = base.replace(/\/$/, '') + path;
-    try {
-      const res = await fetch(full, { headers: buildHeaders(token, false) });
-      results.push({ base, status: res.status });
-    } catch (e) {
-      results.push({ base, error: e.message });
-    }
-  }
-  console.warn('[todoistApi] testBases single-base result', results);
-  return results;
-}
+export { TodoistClient, TodoistApiError };

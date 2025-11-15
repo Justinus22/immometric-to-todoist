@@ -1,140 +1,174 @@
-// Background service worker (MV3) orchestrating task creation.
+/**
+ * Background Service Worker - Immometrica to Todoist Extension
+ * Handles task creation from property listings
+ */
+
 import { getToken, getCache, setCache } from './utils/storage.js';
-import { getProjects, getSections, createTask, testBases, setApiBase } from './api/todoistApi.js';
+import { getProjects, getSections, createTask, TodoistApiError } from './api/todoistApi.js';
 
-const PROJECT_NAME = 'Akquise';
-const SECTION_NAME = 'Noch nicht angefragt aber interessant';
+// Target project and section in Todoist
+const CONFIG = {
+  PROJECT_NAME: 'Akquise',
+  SECTION_NAME: 'Noch nicht angefragt aber interessant',
+  BADGE_TIMEOUT: 3000,
+};
 
-chrome.action.onClicked.addListener(async (tab) => {
-  // Basic validation for active tab.
-  try {
-    await handleActionClick(tab);
-  } catch (e) {
-    console.error('Unhandled error', e);
-    setBadge('ERR');
-  }
-});
+// Badge states with colors and messages
+const BADGES = {
+  OK: { text: 'OK', color: '#198754' },
+  ERROR: { text: 'ERR', color: '#dc3545' },
+  NO_URL: { text: 'NO', color: '#dc3545' },
+  NO_TOKEN: { text: 'TOK', color: '#ffc107' },
+  INVALID: { text: 'BAD', color: '#dc3545' },
+  PROJECT: { text: 'PRJ', color: '#dc3545' },
+  SECTION: { text: 'SEC', color: '#dc3545' },
+  AUTH: { text: 'AUTH', color: '#dc3545' },
+  NETWORK: { text: 'NET', color: '#dc3545' },
+};
 
-chrome.runtime.onMessage.addListener((msg, _sender, _sendResponse) => {
-  if (msg?.type === 'SCRAPE_RESULT') {
-    processScrapeResult(msg.payload).catch(err => {
-      console.error('Processing error', err);
-      setBadge('ERR');
-    });
-  }
-});
-
-function setBadge(text, success = false) {
-  chrome.action.setBadgeText({ text });
-  chrome.action.setBadgeBackgroundColor({ color: success ? '#198754' : '#dc3545' });
-  setTimeout(() => chrome.action.setBadgeText({ text: '' }), 3000);
+/**
+ * Display status badge temporarily
+ */
+function showBadge(type) {
+  const badge = BADGES[type] || BADGES.ERROR;
+  chrome.action.setBadgeText({ text: badge.text });
+  chrome.action.setBadgeBackgroundColor({ color: badge.color });
+  setTimeout(() => chrome.action.setBadgeText({ text: '' }), CONFIG.BADGE_TIMEOUT);
 }
 
-function validateOfferUrl(url) {
+/**
+ * Validate if URL is an ImmoMetrica offer page
+ */
+function isOfferUrl(url) {
   return /^https:\/\/www\.immometrica\.com\/de\/offer\/\d+/.test(url);
 }
 
-async function handleActionClick(tab) {
-  if (!tab || !tab.url) { setBadge('NO', false); return; }
-  const url = tab.url;
-  if (!validateOfferUrl(url)) {
-    console.warn('Not an offer page:', url);
-    setBadge('NO');
-    return;
+/**
+ * Find or retrieve cached project/section IDs
+ */
+async function resolveProjectAndSection(token) {
+  const cache = await getCache();
+  
+  if (cache?.projectId && cache?.sectionId) {
+    return { projectId: cache.projectId, sectionId: cache.sectionId };
   }
+
+  // Fetch fresh data
+  const projects = await getProjects(token);
+  const project = projects.find(p => p.name === CONFIG.PROJECT_NAME);
+  
+  if (!project) {
+    throw new Error(`Project "${CONFIG.PROJECT_NAME}" not found`);
+  }
+
+  const sections = await getSections(token, project.id);
+  const section = sections.find(s => s.name === CONFIG.SECTION_NAME);
+  
+  if (!section) {
+    throw new Error(`Section "${CONFIG.SECTION_NAME}" not found`);
+  }
+
+  // Cache the results
+  await setCache({
+    projectId: project.id,
+    sectionId: section.id,
+    projectName: project.name,
+    sectionName: section.name,
+    timestamp: Date.now(),
+  });
+
+  return { projectId: project.id, sectionId: section.id };
+}
+
+/**
+ * Process scraped listing data and create Todoist task
+ */
+async function createListingTask({ title, url }) {
+  if (!title || !url) {
+    throw new Error('Missing title or URL from scraped data');
+  }
+
   const token = await getToken();
   if (!token) {
-    console.warn('Missing token');
-    setBadge('TOK');
-    return;
+    throw new Error('API token not configured');
   }
-  // Inject content script to extract title.
-  await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    files: ['contentScript.js']
+
+  const { projectId, sectionId } = await resolveProjectAndSection(token);
+
+  await createTask(token, {
+    content: title,
+    description: url,
+    project_id: projectId,
+    section_id: sectionId,
   });
-  // Actual processing continues in onMessage listener.
 }
 
-async function processScrapeResult(payload) {
-  const { valid, title, url } = payload || {};
-  if (!valid || !title) {
-    console.warn('Invalid scrape result', payload);
-    setBadge('BAD');
-    return;
-  }
-  const token = await getToken();
-  if (!token) { setBadge('TOK'); return; }
-
-  // Resolve project/section IDs (use cache if available)
-  let cache = await getCache();
-  let projectId, sectionId;
-
-  if (cache?.projectId && cache?.sectionId) {
-    projectId = cache.projectId;
-    sectionId = cache.sectionId;
-  } else {
-    const projects = await getProjects(token);
-    if (!Array.isArray(projects) || projects.length === 0) {
-      console.warn('Projects list empty or invalid.');
-      setBadge('PRJ');
-      return;
-    }
-    const project = projects.find(p => p.name === PROJECT_NAME);
-    if (!project) { console.warn('Project not found'); setBadge('PRJ'); return; }
-
-    const sections = await getSections(token, project.id);
-    if (!Array.isArray(sections) || sections.length === 0) {
-      console.warn('Sections list empty or invalid.');
-      setBadge('SEC');
-      return;
-    }
-    const section = sections.find(s => s.name === SECTION_NAME);
-    if (!section) { console.warn('Section not found'); setBadge('SEC'); return; }
-
-    projectId = project.id;
-    sectionId = section.id;
-
-    cache = {
-      projectId,
-      sectionId,
-      projectName: project.name,
-      sectionName: section.name,
-      cacheTimestamp: Date.now()
-    };
-    await setCache(cache);
-  }
-
-  // Create task
+/**
+ * Handle extension icon click
+ */
+async function handleIconClick(tab) {
   try {
-    const task = await createTask(token, {
-      content: title,
-      description: url,
-      project_id: projectId,
-      section_id: sectionId
+    if (!tab?.url || !isOfferUrl(tab.url)) {
+      showBadge('NO_URL');
+      return;
+    }
+
+    const token = await getToken();
+    if (!token) {
+      showBadge('NO_TOKEN');
+      return;
+    }
+
+    // Execute content script to extract listing data
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['contentScript.js'],
     });
-    console.log('Task created', task);
-    setBadge('OK', true);
-  } catch (err) {
-    console.error('Task creation error', err);
-    if (err?.status === 401) setBadge('AUTH');
-    else if (err?.type === 'NETWORK') setBadge('NET');
-    else setBadge('ERR');
-    // Provide quick hint if base may be wrong.
-    if (err?.type === 'HTTP' && err.status === 404) {
-      console.warn('404 from current base; consider testing alternate API bases.');
+
+  } catch (error) {
+    console.error('Icon click error:', error);
+    showBadge('ERROR');
+  }
+}
+
+/**
+ * Handle content script messages
+ */
+async function handleMessage(message) {
+  if (message.type !== 'SCRAPE_RESULT') return;
+
+  try {
+    const { valid, title, url } = message.payload || {};
+    
+    if (!valid) {
+      showBadge('INVALID');
+      return;
+    }
+
+    await createListingTask({ title, url });
+    showBadge('OK');
+
+  } catch (error) {
+    console.error('Message handling error:', error);
+    
+    if (error instanceof TodoistApiError) {
+      switch (error.type) {
+        case 'AUTH': showBadge('AUTH'); break;
+        case 'NETWORK': showBadge('NETWORK'); break;
+        default: showBadge('ERROR');
+      }
+    } else if (error.message.includes('Project')) {
+      showBadge('PROJECT');
+    } else if (error.message.includes('Section')) {
+      showBadge('SECTION');
+    } else if (error.message.includes('token')) {
+      showBadge('NO_TOKEN');
+    } else {
+      showBadge('ERROR');
     }
   }
 }
 
-// Optional command-style messages to run diagnostics from DevTools.
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg?.type === 'RUN_API_BASE_TEST') {
-    getToken().then(token => {
-      if (!token) { console.warn('No token for base test'); return; }
-      testBases(token).catch(e => console.error('Base test error', e));
-    });
-  } else if (msg?.type === 'SET_API_BASE' && msg.base) {
-    setApiBase(msg.base);
-  }
-});
+// Event listeners
+chrome.action.onClicked.addListener(handleIconClick);
+chrome.runtime.onMessage.addListener(handleMessage);

@@ -1,32 +1,228 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ImmoMetrica → Todoist Settings</title>
   <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 16px; }
-    label { display: block; margin-top: 12px; font-weight: 600; }
-    input[type=text], input[type=password] { width: 100%; padding: 8px; box-sizing: border-box; }
-    button { margin-top: 12px; padding: 8px 14px; cursor: pointer; }
-    .row { margin-top: 8px; }
-    .status { margin-top: 12px; font-size: 0.9em; color: #555; }
-    .error { color: #b00020; }
-    .success { color: #0a7d25; }
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --success: #059669;
+      --error: #dc2626;
+      --warning: #d97706;
+      --border: #e5e7eb;
+      --bg-light: #f9fafb;
+      --text: #374151;
+      --text-light: #6b7280;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      line-height: 1.6;
+      color: var(--text);
+      margin: 0;
+      padding: 2rem;
+      background: var(--bg-light);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      margin: 0 0 1rem;
+      font-size: 1.875rem;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: var(--text-light);
+      margin-bottom: 2rem;
+      font-size: 1rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--text);
+    }
+
+    input[type="password"] {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+
+    input[type="password"]:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 1.5rem;
+    }
+
+    button {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      min-width: 120px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background: #6b7280;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #4b5563;
+    }
+
+    .btn-danger {
+      background: var(--error);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #b91c1c;
+    }
+
+    .status {
+      margin-top: 1.5rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: none;
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    .status.success {
+      background: #dcfce7;
+      color: var(--success);
+      border: 1px solid #bbf7d0;
+    }
+
+    .status.error {
+      background: #fef2f2;
+      color: var(--error);
+      border: 1px solid #fecaca;
+    }
+
+    .status.info {
+      background: #eff6ff;
+      color: var(--primary);
+      border: 1px solid #bfdbfe;
+    }
+
+    .cache-info {
+      margin-top: 2rem;
+      padding: 1rem;
+      background: var(--bg-light);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .cache-info h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .cache-details {
+      font-size: 0.875rem;
+      color: var(--text-light);
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 1rem;
+      }
+      
+      .container {
+        padding: 1.5rem;
+      }
+      
+      .button-group {
+        flex-direction: column;
+      }
+      
+      button {
+        min-width: auto;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>ImmoMetrica → Todoist</h1>
-  <p>Enter your personal Todoist API token (stored locally only). Clear cache if you changed project or section names.</p>
-  <label for="token">Todoist Token</label>
-  <input id="token" type="password" placeholder="Paste token here" autocomplete="off" />
-  <div class="row">
-    <button id="saveBtn">Save Token</button>
-    <button id="clearTokenBtn" type="button">Clear Token</button>
+  <div class="container">
+    <h1>ImmoMetrica → Todoist</h1>
+    <p class="subtitle">
+      Configure your Todoist integration. Your API token is stored securely in local browser storage only.
+    </p>
+
+    <div class="form-group">
+      <label for="token">Todoist API Token</label>
+      <input 
+        id="token" 
+        type="password" 
+        placeholder="Paste your Todoist API token here"
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </div>
+
+    <div class="button-group">
+      <button id="saveBtn" class="btn-primary">Save Token</button>
+      <button id="clearTokenBtn" class="btn-secondary">Clear Token</button>
+      <button id="clearCacheBtn" class="btn-danger">Clear Cache</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div id="cacheInfo" class="cache-info" style="display: none;">
+      <h3>Cache Information</h3>
+      <div id="cacheDetails" class="cache-details"></div>
+    </div>
   </div>
-  <div class="row">
-    <button id="clearCacheBtn" type="button">Clear Project/Section Cache</button>
-  </div>
-  <div id="status" class="status"></div>
+
   <script type="module" src="options.js"></script>
 </body>
 </html>

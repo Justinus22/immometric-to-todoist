@@ -1,31 +1,118 @@
-// Storage utilities for token and project/section cache.
-// Uses chrome.storage.local; all functions return Promises.
+/**
+ * Storage Utilities - Chrome Extension Local Storage
+ * Modern wrapper for chrome.storage.local with type safety and validation
+ */
 
-const TOKEN_KEY = 'todoistToken';
-const CACHE_KEY = 'todoistCache'; // { projectId, projectName, sectionId, sectionName, cacheTimestamp }
+// Storage keys
+const KEYS = {
+  TOKEN: 'todoistToken',
+  CACHE: 'todoistCache',
+};
 
-export async function getToken() {
-  const data = await chrome.storage.local.get([TOKEN_KEY]);
-  return data[TOKEN_KEY] || null;
+// Cache expiration time (24 hours)
+const CACHE_DURATION = 24 * 60 * 60 * 1000;
+
+/**
+ * Generic storage getter with optional validation
+ */
+async function getStorageItem(key, validator = null) {
+  try {
+    const result = await chrome.storage.local.get([key]);
+    const value = result[key] || null;
+    
+    if (value && validator && !validator(value)) {
+      console.warn(`Invalid data for key ${key}, removing`);
+      await chrome.storage.local.remove([key]);
+      return null;
+    }
+    
+    return value;
+  } catch (error) {
+    console.error(`Failed to get storage item ${key}:`, error);
+    return null;
+  }
 }
 
-export async function setToken(token) {
-  await chrome.storage.local.set({ [TOKEN_KEY]: token });
+/**
+ * Generic storage setter
+ */
+async function setStorageItem(key, value) {
+  try {
+    await chrome.storage.local.set({ [key]: value });
+  } catch (error) {
+    console.error(`Failed to set storage item ${key}:`, error);
+    throw new Error(`Storage write failed: ${error.message}`);
+  }
 }
 
-export async function getCache() {
-  const data = await chrome.storage.local.get([CACHE_KEY]);
-  return data[CACHE_KEY] || null;
+/**
+ * Generic storage remover
+ */
+async function removeStorageItem(key) {
+  try {
+    await chrome.storage.local.remove([key]);
+  } catch (error) {
+    console.error(`Failed to remove storage item ${key}:`, error);
+  }
 }
 
-export async function setCache(cacheObj) {
-  await chrome.storage.local.set({ [CACHE_KEY]: cacheObj });
+/**
+ * Validate cache object structure and freshness
+ */
+function validateCache(cache) {
+  return (
+    cache &&
+    typeof cache === 'object' &&
+    cache.projectId &&
+    cache.sectionId &&
+    cache.timestamp &&
+    (Date.now() - cache.timestamp) < CACHE_DURATION
+  );
 }
 
-export async function clearCache() {
-  await chrome.storage.local.remove([CACHE_KEY]);
+/**
+ * Validate token (basic non-empty string check)
+ */
+function validateToken(token) {
+  return typeof token === 'string' && token.length > 0;
 }
 
-export async function clearToken() {
-  await chrome.storage.local.remove([TOKEN_KEY]);
+// Public API
+export const getToken = () => getStorageItem(KEYS.TOKEN, validateToken);
+export const setToken = (token) => setStorageItem(KEYS.TOKEN, token);
+export const clearToken = () => removeStorageItem(KEYS.TOKEN);
+
+export const getCache = () => getStorageItem(KEYS.CACHE, validateCache);
+export const setCache = (cache) => setStorageItem(KEYS.CACHE, { ...cache, timestamp: Date.now() });
+export const clearCache = () => removeStorageItem(KEYS.CACHE);
+
+/**
+ * Clear all extension data
+ */
+export async function clearAllData() {
+  try {
+    await chrome.storage.local.clear();
+  } catch (error) {
+    console.error('Failed to clear all data:', error);
+  }
+}
+
+/**
+ * Get storage usage stats
+ */
+export async function getStorageStats() {
+  try {
+    const data = await chrome.storage.local.get(null);
+    return {
+      totalItems: Object.keys(data).length,
+      hasToken: !!data[KEYS.TOKEN],
+      hasCache: !!data[KEYS.CACHE],
+      cacheAge: data[KEYS.CACHE]?.timestamp 
+        ? Date.now() - data[KEYS.CACHE].timestamp 
+        : null,
+    };
+  } catch (error) {
+    console.error('Failed to get storage stats:', error);
+    return null;
+  }
 }

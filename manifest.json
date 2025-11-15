@@ -1,16 +1,27 @@
 {
   "manifest_version": 3,
   "name": "ImmoMetrica → Todoist",
-  "version": "0.1.0",
-  "description": "One-click add ImmoMetrica offer to Todoist Akquise section.",
+  "version": "1.0.0",
+  "description": "Add ImmoMetrica property listings to Todoist with one click",
+  
   "action": {
-    "default_title": "Add to Todoist"
+    "default_title": "Add property to Todoist"
   },
-  "permissions": ["storage", "tabs", "scripting"],
-  "host_permissions": ["https://www.immometrica.com/*"],
+  
   "background": {
     "service_worker": "service_worker.js",
     "type": "module"
   },
+  
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  
+  "host_permissions": [
+    "https://www.immometrica.com/*"
+  ],
+  
   "options_page": "options.html"
 }

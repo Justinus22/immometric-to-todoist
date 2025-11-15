@@ -1,17 +1,58 @@
-// Content script injected on demand to extract listing data.
+/**
+ * Content Script - ImmoMetrica Listing Data Extractor
+ * Extracts property title from listing pages
+ */
+
 (() => {
-  function isOfferUrl(url) {
-    return /^https:\/\/www\.immometrica\.com\/de\/offer\/\d+/.test(url);
+  'use strict';
+
+  // Selectors for property listing elements
+  const SELECTORS = {
+    TITLE: 'header.page-header h2.no-margin-bottom',
+  };
+
+  /**
+   * Check if current URL is a valid ImmoMetrica offer page
+   */
+  function isValidOfferPage() {
+    return /^https:\/\/www\.immometrica\.com\/de\/offer\/\d+/.test(location.href);
   }
 
-  const url = window.location.href;
-  const titleEl = document.querySelector('header.page-header h2.no-margin-bottom');
-  const valid = isOfferUrl(url) && !!titleEl;
-  const title = titleEl ? titleEl.textContent.trim() : null;
+  /**
+   * Extract property title from the page
+   */
+  function extractTitle() {
+    const titleElement = document.querySelector(SELECTORS.TITLE);
+    return titleElement?.textContent?.trim() || null;
+  }
 
-  // Return data to the service worker via messaging.
-  chrome.runtime.sendMessage({
-    type: 'SCRAPE_RESULT',
-    payload: { valid, title, url }
-  });
+  /**
+   * Send extracted data to background service worker
+   */
+  function sendData(data) {
+    chrome.runtime.sendMessage({
+      type: 'SCRAPE_RESULT',
+      payload: data,
+    });
+  }
+
+  // Main execution
+  try {
+    const valid = isValidOfferPage();
+    const title = valid ? extractTitle() : null;
+    
+    sendData({
+      valid: valid && !!title,
+      title,
+      url: location.href,
+    });
+    
+  } catch (error) {
+    console.error('Content script error:', error);
+    sendData({
+      valid: false,
+      title: null,
+      url: location.href,
+    });
+  }
 })();
