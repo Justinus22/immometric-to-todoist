@@ -75,10 +75,20 @@ async function processScrapeResult(payload) {
     sectionId = cache.sectionId;
   } else {
     const projects = await getProjects(token);
+    if (!Array.isArray(projects) || projects.length === 0) {
+      console.warn('Projects list empty or invalid.');
+      setBadge('PRJ');
+      return;
+    }
     const project = projects.find(p => p.name === PROJECT_NAME);
     if (!project) { console.warn('Project not found'); setBadge('PRJ'); return; }
 
     const sections = await getSections(token, project.id);
+    if (!Array.isArray(sections) || sections.length === 0) {
+      console.warn('Sections list empty or invalid.');
+      setBadge('SEC');
+      return;
+    }
     const section = sections.find(s => s.name === SECTION_NAME);
     if (!section) { console.warn('Section not found'); setBadge('SEC'); return; }
 
