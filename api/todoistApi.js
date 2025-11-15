@@ -89,6 +89,17 @@ class TodoistClient {
     return this.fetchPaged(endpoint);
   }
 
+  async getLabels() {
+    return this.fetchPaged('/labels');
+  }
+
+  async createLabel(label) {
+    return this.request('/labels', {
+      method: 'POST',
+      body: label,
+    });
+  }
+
   async createTask(task) {
     return this.request('/tasks', {
       method: 'POST',
@@ -108,6 +119,16 @@ export async function getProjects(token) {
 export async function getSections(token, projectId) {
   const client = new TodoistClient(token);
   return client.getSections(projectId);
+}
+
+export async function getLabels(token) {
+  const client = new TodoistClient(token);
+  return client.getLabels();
+}
+
+export async function createLabel(token, payload) {
+  const client = new TodoistClient(token);
+  return client.createLabel(payload);
 }
 
 export async function createTask(token, payload) {

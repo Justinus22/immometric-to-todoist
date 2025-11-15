@@ -9,7 +9,8 @@ A modern Chrome extension that lets you add ImmoMetrica property listings to Tod
 ## ✨ Features
 
 - **One-click integration**: Add property listings to Todoist instantly
-- **Smart extraction**: Automatically extracts property title and URL
+- **Smart extraction**: Automatically extracts property title, URL, and location
+- **Location labels**: Automatically creates and assigns city labels (e.g., "Oranienburg", "Storkow")
 - **Caching**: Efficiently stores project/section IDs to minimize API calls
 - **Modern UI**: Clean, responsive options page with real-time feedback
 - **Error handling**: Comprehensive error states with user-friendly messages
@@ -51,7 +52,17 @@ A modern Chrome extension that lets you add ImmoMetrica property listings to Tod
 
 2. **Click the extension icon**
    - The property will be automatically added to your Todoist
+   - The city name will be automatically extracted and added as a label
    - Success/error status will show as a badge on the extension icon
+
+### How Location Detection Works
+
+The extension automatically extracts the city name from the property listing using these patterns:
+- **"Brandenburg - CityName"** → extracts "CityName" (e.g., "Oranienburg")  
+- **"12345 CityName"** → extracts "CityName" from postal code + city format
+- **Automatic labeling**: Creates Todoist labels like "Oranienburg", "Storkow", "Fürstenwalde"
+
+If a label for the city already exists, it will be reused. If not, a new label is created automatically.
 
 ## 🏗️ Architecture
 
@@ -87,21 +98,26 @@ https://www.immometrica.com/de/offer/*
 ### Data Flow
 1. User clicks extension icon on a property page
 2. Service worker validates the page URL
-3. Content script extracts property title from the DOM
+3. Content script extracts property title and location from the DOM
 4. Service worker resolves Todoist project/section IDs (cached)
-5. Creates task via Todoist API v1
-6. Shows success/error feedback via badge
+5. Service worker finds or creates a location label (e.g., "Oranienburg")
+6. Creates task via Todoist API v1 with title, description, and location label
+7. Shows success/error feedback via badge
 
 ### API Integration
 Uses the **Todoist REST API v1** with the following endpoints:
 - `GET /projects` - Fetch user's projects
 - `GET /sections` - Fetch project sections
-- `POST /tasks` - Create new task
+- `GET /labels` - Fetch user's labels
+- `POST /labels` - Create new location labels
+- `POST /tasks` - Create new task with labels
 
 ### Storage
 Uses `chrome.storage.local` to store:
 - Todoist API token (encrypted by Chrome)
 - Cached project and section IDs (24h TTL)
+
+**Note**: Location labels are managed dynamically - the extension will automatically create labels for new cities as they are encountered.
 
 ## 🎯 Badge States
 

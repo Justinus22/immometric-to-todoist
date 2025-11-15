@@ -4,7 +4,7 @@
  */
 
 import { getToken, getCache, setCache } from './utils/storage.js';
-import { getProjects, getSections, createTask, TodoistApiError } from './api/todoistApi.js';
+import { getProjects, getSections, getLabels, createLabel, createTask, TodoistApiError } from './api/todoistApi.js';
 
 // Target project and section in Todoist
 const CONFIG = {
@@ -81,9 +81,34 @@ async function resolveProjectAndSection(token) {
 }
 
 /**
+ * Find or create a label for the given location
+ */
+async function resolveLocationLabel(token, location) {
+  if (!location) return null;
+  
+  try {
+    // Check if label already exists
+    const labels = await getLabels(token);
+    const existingLabel = labels.find(l => l.name === location);
+    
+    if (existingLabel) {
+      return existingLabel.id;
+    }
+    
+    // Create new label
+    const newLabel = await createLabel(token, { name: location });
+    return newLabel?.id || null;
+    
+  } catch (error) {
+    console.warn(`Failed to resolve location label for "${location}":`, error);
+    return null;
+  }
+}
+
+/**
  * Process scraped listing data and create Todoist task
  */
-async function createListingTask({ title, url }) {
+async function createListingTask({ title, url, location }) {
   if (!title || !url) {
     throw new Error('Missing title or URL from scraped data');
   }
@@ -95,12 +120,23 @@ async function createListingTask({ title, url }) {
 
   const { projectId, sectionId } = await resolveProjectAndSection(token);
 
-  await createTask(token, {
+  // Prepare task data
+  const taskData = {
     content: title,
     description: url,
     project_id: projectId,
     section_id: sectionId,
-  });
+  };
+
+  // Add location label if available
+  if (location) {
+    const labelId = await resolveLocationLabel(token, location);
+    if (labelId) {
+      taskData.label_ids = [labelId];
+    }
+  }
+
+  await createTask(token, taskData);
 }
 
 /**
@@ -138,14 +174,14 @@ async function handleMessage(message) {
   if (message.type !== 'SCRAPE_RESULT') return;
 
   try {
-    const { valid, title, url } = message.payload || {};
+    const { valid, title, url, location } = message.payload || {};
     
     if (!valid) {
       showBadge('INVALID');
       return;
     }
 
-    await createListingTask({ title, url });
+    await createListingTask({ title, url, location });
     showBadge('OK');
 
   } catch (error) {
