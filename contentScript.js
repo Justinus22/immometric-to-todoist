@@ -79,104 +79,231 @@
   }
 
   /**
-   * Extract city name from a single text string using pattern matching
-   * Based on 6 tested ImmoMetrica sample patterns
+   * German postal code to city mapping for major cities in Brandenburg/Berlin area
+   * This helps us validate and correct city names extracted from postal codes
+   */
+  const POSTAL_CODE_CITIES = {
+    // Berlin area
+    '10115': 'Berlin', '10117': 'Berlin', '10119': 'Berlin', '10178': 'Berlin',
+    '10179': 'Berlin', '10243': 'Berlin', '10245': 'Berlin', '10247': 'Berlin',
+    '12619': 'Berlin', '13187': 'Berlin', '13189': 'Berlin',
+    
+    // Brandenburg cities from our samples
+    '14712': 'Rathenow',
+    '14715': 'Nennhausen', 
+    '14974': 'Ludwigsfelde',
+    '15517': 'Fürstenwalde/Spree',  // Use the full city name with district
+    '16515': 'Oranienburg',
+    
+    // Additional major Brandenburg cities
+    '14467': 'Potsdam',
+    '14469': 'Potsdam',
+    '14471': 'Potsdam',
+    '14473': 'Potsdam',
+    '14476': 'Potsdam',
+    '14478': 'Potsdam',
+    '14480': 'Potsdam',
+    '14482': 'Potsdam',
+    '14532': 'Kleinmachnow',
+    '14542': 'Werder',
+    '14547': 'Beelitz',
+    '14552': 'Michendorf',
+    '14554': 'Seddiner See',
+    '14558': 'Nuthetal',
+    '14641': 'Nauen',
+    '14943': 'Luckenwalde',
+    '14947': 'Nuthe-Urstromtal',
+    '15806': 'Zossen',
+    '15827': 'Blankenfelde-Mahlow',
+    '15831': 'Mahlow',
+    '15834': 'Rangsdorf',
+    '15838': 'Am Mellensee',
+    '16259': 'Bad Freienwalde',
+    '16321': 'Bernau',
+    '16348': 'Wandlitz',
+    '16356': 'Werneuchen',
+    '16540': 'Hohen Neuendorf',
+    '16547': 'Birkenwerder',
+    '16552': 'Saalfeld',
+    '16559': 'Liebenwalde'
+  };
+
+  /**
+   * Known German cities - comprehensive list for fallback matching
+   */
+  const KNOWN_CITIES = [
+    // Major cities
+    'Berlin', 'Hamburg', 'München', 'Köln', 'Frankfurt', 'Stuttgart', 'Düsseldorf',
+    'Leipzig', 'Dortmund', 'Essen', 'Bremen', 'Dresden', 'Hannover', 'Nürnberg',
+    
+    // Brandenburg cities from samples and surroundings
+    'Oranienburg', 'Rathenow', 'Fürstenwalde', 'Ludwigsfelde', 'Nennhausen', 
+    'Potsdam', 'Cottbus', 'Brandenburg', 'Frankfurt (Oder)', 'Eberswalde',
+    'Senftenberg', 'Finsterwalde', 'Eisenhüttenstadt', 'Neuruppin', 'Strausberg',
+    'Königs Wusterhausen', 'Hennigsdorf', 'Teltow', 'Luckenwalde', 'Bernau',
+    'Werder', 'Beelitz', 'Nauen', 'Zossen', 'Bad Freienwalde', 'Wittenberge',
+    'Prenzlau', 'Templin', 'Schwedt', 'Guben', 'Spremberg', 'Forst',
+    
+    // Common compound city names
+    'Fürstenwalde/Spree', 'Frankfurt/Oder', 'Bad Freienwalde', 'Königs Wusterhausen',
+    'Hohen Neuendorf', 'Blankenfelde-Mahlow', 'Seddiner See', 'Am Mellensee'
+  ];
+
+  /**
+   * Extract city name from text using postal codes and city name matching
    */
   function extractCityFromText(text) {
     if (!text) return null;
     
+    // Clean up the text - remove duplicates and extra whitespace
     text = text.trim();
+    
+    // Remove duplicate patterns like "14712 Brandenburg - Rathenow 14712 Brandenburg - Rathenow"
+    const duplicatePattern = /^(.+?)\s+\1+$/;
+    if (duplicatePattern.test(text)) {
+      text = text.replace(duplicatePattern, '$1').trim();
+      console.log(`DEBUG: Removed duplicate pattern, cleaned text: "${text}"`);
+    }
+    
     console.log(`DEBUG: Extracting city from: "${text}"`);
     
-    // Pattern 1: Simple "postal city" format (Sample 1: "16515 Oranienburg")
-    const pattern1 = /^\d{5}\s+([^,]+)$/.exec(text);
-    if (pattern1) {
-      console.log(`DEBUG: Pattern 1 matched: "${pattern1[1].trim()}"`);
-      return pattern1[1].trim();
+    // Method 1: Extract postal code and look it up directly
+    const postalMatch = text.match(/(\d{5})/);
+    if (postalMatch) {
+      const postalCode = postalMatch[1];
+      const cityFromPostal = POSTAL_CODE_CITIES[postalCode];
+      if (cityFromPostal) {
+        console.log(`DEBUG: Found city via postal code ${postalCode}: "${cityFromPostal}"`);
+        return cityFromPostal;
+      }
+      console.log(`DEBUG: Postal code ${postalCode} not in database, trying text extraction`);
     }
     
-    // Pattern 2: "postal city, district" format (Sample 2: "14712 Rathenow, Havelland")  
-    const pattern2 = /^\d{5}\s+([^,]+),/.exec(text);
-    if (pattern2) {
-      console.log(`DEBUG: Pattern 2 matched: "${pattern2[1].trim()}"`);
-      return pattern2[1].trim();
+    // Method 2: Extract city after postal code using flexible patterns
+    const patterns = [
+      // "12345 CityName" - simple format
+      /\d{5}\s+([A-ZÄÖÜ][a-zäöüß\/\-\s]+?)(?:\s*,|\s*$)/,
+      
+      // "Brandenburg - CityName" or "State - City" format  
+      /(?:Brandenburg|Berlin)\s*[-–]\s*([A-ZÄÖÜ][a-zäöüß\/\-\s]+?)(?:\s*,|\s*\d|\s*$)/,
+      
+      // "12345, CityName" - postal code with comma
+      /\d{5}\s*,\s*([A-ZÄÖÜ][a-zäöüß\/\-\s]+?)(?:\s*,|\s*$)/,
+      
+      // Just city name at start of text
+      /^([A-ZÄÖÜ][a-zäöüß\/\-\s]+?)(?:\s*,|\s*\d)/
+    ];
+    
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) {
+        let candidate = match[1].trim();
+        
+        // Clean up common suffixes
+        candidate = candidate.replace(/\s+(Ortsteil|OT|Stadt).*$/, '');
+        candidate = candidate.replace(/\s*\([^)]+\)\s*$/, ''); // Remove parentheses
+        
+        // Validate against known cities
+        if (isValidCityName(candidate)) {
+          console.log(`DEBUG: Pattern matched and validated: "${candidate}"`);
+          return candidate;
+        }
+      }
     }
     
-    // Pattern 3: "postal city, ortsteil detail" format (Sample 3: "15517 Fürstenwalde/Spree, Ortsteil Ketschendorf")
-    const pattern3 = /^\d{5}\s+([^,]+),\s*Ortsteil/.exec(text);
-    if (pattern3) {
-      console.log(`DEBUG: Pattern 3 matched: "${pattern3[1].trim()}"`);
-      return pattern3[1].trim();
+    // Method 3: Fallback - search for any known city name in the text
+    for (const city of KNOWN_CITIES) {
+      if (text.includes(city)) {
+        console.log(`DEBUG: Found known city in text: "${city}"`);
+        return city;
+      }
     }
     
-    // Pattern 5: "postal city, city" duplicate format (Sample 5: "12619 Berlin, Berlin")
-    const pattern5 = /^\d{5}\s+([^,]+),\s*\1$/.exec(text);
-    if (pattern5) {
-      console.log(`DEBUG: Pattern 5 matched: "${pattern5[1].trim()}"`);
-      return pattern5[1].trim();
-    }
-    
-    // Pattern 6: "postal city, OT subdivision (subdivision)" format (Sample 6: "14715 Nennhausen, OT Bamme (Bamme)")
-    const pattern6 = /^\d{5}\s+([^,]+),/.exec(text);
-    if (pattern6) {
-      console.log(`DEBUG: Pattern 6 matched: "${pattern6[1].trim()}"`);
-      return pattern6[1].trim();
-    }
-    
-    // Fallback: Extract anything after 5 digits and space, before comma or end
-    const fallback = /^\d{5}\s+([^,\n]+)/.exec(text);
-    if (fallback) {
-      console.log(`DEBUG: Fallback pattern matched: "${fallback[1].trim()}"`);
-      return fallback[1].trim();
-    }
-    
-    console.log(`DEBUG: No pattern matched for text: "${text}"`);
+    console.log(`DEBUG: No city found in text: "${text}"`);
     return null;
+  }
+
+  /**
+   * Validate if a candidate string is a valid German city name
+   */
+  function isValidCityName(candidate) {
+    if (!candidate || candidate.length < 2) return false;
+    
+    // Direct match with known cities
+    if (KNOWN_CITIES.includes(candidate)) return true;
+    
+    // Fuzzy match for slight variations
+    const normalized = candidate.toLowerCase();
+    for (const city of KNOWN_CITIES) {
+      if (city.toLowerCase() === normalized) return true;
+      
+      // Handle common variations
+      if (city.toLowerCase().includes(normalized) || normalized.includes(city.toLowerCase())) {
+        // Only accept if length difference is small (handles "Fürstenwalde" vs "Fürstenwalde/Spree")
+        if (Math.abs(city.length - candidate.length) <= 6) {
+          return true;
+        }
+      }
+    }
+    
+    // Basic validation - starts with capital, reasonable length, German chars
+    const basicValidation = /^[A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ\s\-\/]{1,25}$/.test(candidate);
+    if (basicValidation && candidate.length >= 4) {
+      console.log(`DEBUG: Candidate "${candidate}" passed basic validation`);
+      return true;
+    }
+    
+    return false;
   }
 
   /**
    * Fallback method to extract location from title, URL, or broader page search
    */
   function extractLocationFallback() {
-    // Extended list of cities including new samples
-    const knownCities = [
-      'Fürstenwalde', 'Oranienburg', 'Rathenow', 'Storkow', 'Bad Saarow', 
-      'Ludwigsfelde', 'Berlin', 'Nennhausen', 'Bamme'
-    ];
+    console.log(`DEBUG: Starting fallback location extraction...`);
     
-    // Check URL for city names
+    // Check URL for city names - use the comprehensive KNOWN_CITIES list
     const url = window.location.href.toLowerCase();
-    for (const city of knownCities) {
+    for (const city of KNOWN_CITIES) {
       if (url.includes(city.toLowerCase())) {
         console.log(`DEBUG: Found city in URL: "${city}"`);
         return city;
       }
     }
     
-    // Check page title
+    // Check page title for city names
     const pageTitle = document.title.toLowerCase();
-    for (const city of knownCities) {
+    for (const city of KNOWN_CITIES) {
       if (pageTitle.includes(city.toLowerCase())) {
         console.log(`DEBUG: Found city in title: "${city}"`);
         return city;
       }
     }
     
-    // Final attempt: search entire page for postal code + city patterns
+    // Search page text for postal codes and try to map them
     const allText = document.body.textContent || '';
-    const postalMatches = allText.match(/\d{5}\s+[A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)*/g);
+    const postalMatches = allText.match(/\b(\d{5})\b/g);
     
     if (postalMatches) {
-      for (const match of postalMatches) {
-        const city = match.replace(/^\d{5}\s+/, '').trim();
-        if (city && city !== 'Brandenburg' && city.length > 2 && !city.match(/\d/)) {
-          console.log(`DEBUG: Found city in page text: "${city}"`);
-          return city;
+      for (const postal of postalMatches) {
+        const cityFromPostal = POSTAL_CODE_CITIES[postal];
+        if (cityFromPostal) {
+          console.log(`DEBUG: Found city via postal code in page text ${postal}: "${cityFromPostal}"`);
+          return cityFromPostal;
         }
       }
     }
     
-    console.log(`DEBUG: No location found with any method`);
+    // Final attempt: broad text search for any known city name
+    const textLower = allText.toLowerCase();
+    for (const city of KNOWN_CITIES.sort((a, b) => b.length - a.length)) { // Sort by length desc to match longer names first
+      if (textLower.includes(city.toLowerCase())) {
+        console.log(`DEBUG: Found city in page text: "${city}"`);
+        return city;
+      }
+    }
+    
+    console.log(`DEBUG: No location found in fallback methods`);
     return null;
   }
 
