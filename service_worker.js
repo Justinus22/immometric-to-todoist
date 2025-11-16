@@ -11,41 +11,97 @@ const CONFIG = {
   BADGE_TIMEOUT: 3000,
 };
 
+// Enhanced badge system with better visual design
 const BADGES = {
-  OK: { text: 'OK', color: '#198754' },
-  DUPLICATE: { text: 'DUP', color: '#28a745' },
-  COMPLETED: { text: '✓DUP', color: '#6c757d' },
-  ERROR: { text: 'ERR', color: '#dc3545' },
-  NO_URL: { text: 'NO', color: '#dc3545' },
-  NO_TOKEN: { text: 'TOK', color: '#ffc107' },
-  INVALID: { text: 'BAD', color: '#dc3545' },
-  PROJECT: { text: 'PRJ', color: '#dc3545' },
-  SECTION: { text: 'SEC', color: '#dc3545' },
-  AUTH: { text: 'AUTH', color: '#dc3545' },
-  NETWORK: { text: 'NET', color: '#dc3545' },
+  // Success states - Green palette
+  OK: { text: '✓', color: '#22c55e', bgColor: '#22c55e' }, // Modern green
+  SAVED: { text: '✓', color: '#22c55e', bgColor: '#22c55e' }, // Darker green for saved
+  
+  // Already added states - Same green as success for seamless UX
+  ALREADY_ADDED: { text: '✓', color: '#22c55e', bgColor: '#22c55e' }, // Same green checkmark as OK
+  COMPLETED_TASK: { text: '✓', color: '#ffffff', bgColor: '#64748b' }, // Same checkmark for completed
+  
+  // Error states - Red palette
+  ERROR: { text: '✕', color: '#ef4444', bgColor: '#ef4444' }, // Modern red
+  NO_URL: { text: '🔗', color: '#ef4444', bgColor: '#ef4444' }, // Link icon for URL issues
+  NO_TOKEN: { text: '🔑', color: '#f97316', bgColor: '#f97316' }, // Key icon for auth
+  
+  // Configuration issues - Orange palette
+  PROJECT: { text: '📁', color: '#f97316', bgColor: '#f97316' }, // Folder for project issues
+  SECTION: { text: '📋', color: '#f97316', bgColor: '#f97316' }, // List for section issues
+  
+  // Network/API issues - Purple palette
+  NETWORK: { text: '🌐', color: '#8b5cf6', bgColor: '#8b5cf6' }, // Globe for network
+  AUTH: { text: '🚫', color: '#8b5cf6', bgColor: '#8b5cf6' }, // Prohibition for auth errors
+  
+  // Processing states - Subtle gray (not warning!)
+  PROCESSING: { text: '⏳', color: '#6b7280', bgColor: '#6b7280' }, // Subtle gray hourglass
 };
 
-function showBadge(type, persistent = false) {
+// Enhanced badge display with better visual feedback
+function showBadge(type, persistent = false, options = {}) {
   const badge = BADGES[type] || BADGES.ERROR;
-  chrome.action.setBadgeText({ text: badge.text });
-  chrome.action.setBadgeBackgroundColor({ color: badge.color });
   
-  // Only set timeout if not persistent
+  // Set badge with enhanced styling
+  chrome.action.setBadgeText({ 
+    text: badge.text,
+    tabId: options.tabId 
+  });
+  
+  chrome.action.setBadgeBackgroundColor({ 
+    color: badge.bgColor,
+    tabId: options.tabId 
+  });
+  
+  // Add title tooltip for better UX
+  const tooltips = {
+    OK: 'Task created successfully',
+    SAVED: 'Task saved to Todoist',
+    ALREADY_ADDED: 'This offer is already in your Todoist',
+    COMPLETED_TASK: 'This offer was already completed in Todoist',
+    ERROR: 'An error occurred',
+    NO_URL: 'Not on a valid offer page',
+    NO_TOKEN: 'Please configure your Todoist token',
+    PROJECT: 'Project configuration needed',
+    SECTION: 'Section configuration needed',
+    NETWORK: 'Network connection issue',
+    AUTH: 'Authentication failed',
+    PROCESSING: 'Adding to Todoist...',
+  };
+  
+  if (tooltips[type]) {
+    chrome.action.setTitle({ 
+      title: `Immometrica → Todoist: ${tooltips[type]}`,
+      tabId: options.tabId 
+    });
+  }
+  
+  // Auto-clear temporary badges (but keep persistent ones)
   if (!persistent) {
-    setTimeout(() => chrome.action.setBadgeText({ text: '' }), CONFIG.BADGE_TIMEOUT);
+    setTimeout(() => {
+      chrome.action.setBadgeText({ text: '', tabId: options.tabId });
+      chrome.action.setTitle({ 
+        title: 'Immometrica → Todoist Extension',
+        tabId: options.tabId 
+      });
+    }, CONFIG.BADGE_TIMEOUT);
   }
 }
 
-function clearBadge() {
-  chrome.action.setBadgeText({ text: '' });
+function clearBadge(tabId = null) {
+  chrome.action.setBadgeText({ text: '', tabId });
+  chrome.action.setTitle({ 
+    title: 'Immometrica → Todoist Extension',
+    tabId 
+  });
 }
 
-// Tab state management
+// Enhanced tab state management with better badge handling
 function setTabState(tabId, url, badgeType = null, existingTask = null) {
   tabStates.set(tabId, { 
     url, 
     badgeType, 
-    isDuplicate: badgeType === 'DUPLICATE',
+    isDuplicate: ['DUPLICATE', 'COMPLETED'].includes(badgeType),
     existingTask 
   });
 }
@@ -56,25 +112,23 @@ function getTabState(tabId) {
 
 function removeTabState(tabId) {
   tabStates.delete(tabId);
+  clearBadge(tabId);
 }
 
+// Update badge for currently active tab
 async function updateBadgeForActiveTab() {
   try {
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!activeTab) {
-      clearBadge();
-      return;
-    }
-
+    if (!activeTab) return;
+    
     const tabState = getTabState(activeTab.id);
     if (tabState?.badgeType) {
-      showBadge(tabState.badgeType, true);
+      showBadge(tabState.badgeType, true, { tabId: activeTab.id });
     } else {
-      clearBadge();
+      clearBadge(activeTab.id);
     }
   } catch (error) {
-    console.error('Failed to update badge for active tab:', error);
-    clearBadge();
+    console.error('Error updating badge for active tab:', error);
   }
 }
 
@@ -210,7 +264,7 @@ async function handleTabUpdate(tabId, changeInfo, tab) {
       
       if (existingTask) {
         // Determine badge type based on task type from search result
-        const badgeType = existingTask.type === 'COMPLETED' ? 'COMPLETED' : 'DUPLICATE';
+        const badgeType = existingTask.type === 'COMPLETED' ? 'COMPLETED_TASK' : 'ALREADY_ADDED';
         setTabState(tabId, tab.url, badgeType, existingTask.task);
       } else {
         setTabState(tabId, tab.url);
@@ -249,7 +303,7 @@ async function handleMessage(message, sender) {
     const { valid, title, url, location } = message.payload || {};
     
     if (!valid) {
-      showBadge('INVALID');
+      showBadge('NO_URL');
       return;
     }
 
@@ -261,24 +315,31 @@ async function handleMessage(message, sender) {
 
     const { projectId, sectionId } = await resolveProjectAndSection(token);
 
+    // Show processing state
+    showBadge('PROCESSING');
+    
     // Check for duplicate first
     const existingTask = await checkForDuplicate(token, projectId, url);
     if (existingTask) {
-      const badgeType = existingTask.checked ? 'COMPLETED' : 'DUPLICATE';
-      setTabState(tabId, url, badgeType, existingTask);
+      const badgeType = existingTask.type === 'COMPLETED' ? 'COMPLETED_TASK' : 'ALREADY_ADDED';
+      setTabState(tabId, url, badgeType, existingTask.task);
       showBadge(badgeType, true); // Persistent badge
       return;
     }
 
     await createListingTask({ title, url, location });
-    showBadge('OK');
     
-    // After successful creation, update tab state and show persistent DUP badge
+    // Show saved confirmation with a nice effect
+    showBadge('SAVED', false, { tabId });
+    
+    // After successful creation, update tab state and show persistent badge
     setTimeout(async () => {
       // Re-check to get the newly created task
       const newTask = await checkForDuplicate(token, projectId, url);
-      setTabState(tabId, url, 'DUPLICATE', newTask);
-      showBadge('DUPLICATE', true);
+      if (newTask) {
+        setTabState(tabId, url, 'ALREADY_ADDED', newTask.task);
+        showBadge('ALREADY_ADDED', true, { tabId });
+      }
     }, CONFIG.BADGE_TIMEOUT);
   } catch (error) {
     console.error('Message handling error:', error);
@@ -303,4 +364,5 @@ chrome.action.onClicked.addListener(handleIconClick);
 chrome.runtime.onMessage.addListener(handleMessage);
 chrome.tabs.onUpdated.addListener(handleTabUpdate);
 chrome.tabs.onActivated.addListener(handleTabActivation);
+chrome.tabs.onRemoved.addListener(handleTabRemoval);
 chrome.tabs.onRemoved.addListener(handleTabRemoval);

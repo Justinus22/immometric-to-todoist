@@ -1,166 +1,216 @@
-# ImmoMetrica → Todoist
+# ImmoMetrica → Todoist Chrome Extension
 
-A minimal Chrome extension that adds ImmoMetrica property listings to Todoist with one click.
+A smart Chrome extension that seamlessly integrates ImmoMetrica property listings with your Todoist workflow. Add interesting properties to your task list with one click, complete with automatic duplicate detection and location labeling.
 
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-brightgreen)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)
 ![ES Modules](https://img.shields.io/badge/ES-Modules-orange)
 
+## 📖 Setup Guides
+
+**Choose your language for detailed setup instructions:**
+
+🇺🇸 **[Complete Setup Guide - English](docs/setup-guide-en.md)**  
+🇩🇪 **[Vollständige Installationsanleitung - Deutsch](docs/setup-guide-de.md)**
+
+*These guides include step-by-step instructions with screenshots for non-technical users.*
+
+---
+
 ## ✨ Features
 
+### 🚀 **Core Functionality**
 - **One-click integration**: Add property listings to Todoist instantly
 - **Smart extraction**: Automatically extracts property title, URL, and location
+- **Intelligent duplicate detection**: Prevents re-adding existing or completed tasks
+- **Visual feedback**: Clear status badges show what's happening
+
+### 🎯 **Smart Duplicate Prevention**
+- **Active task detection**: Won't create duplicates of existing tasks
+- **Completed task awareness**: Recognizes previously completed properties
+- **Seamless UX**: Same green checkmark whether newly added or already exists
+- **Persistent state**: Remembers task status when revisiting properties
+
+### 🏷️ **Automatic Organization**
 - **Location labels**: Creates and assigns city labels automatically
+- **Project structure**: Organizes properties in dedicated Todoist project
+- **Section management**: Groups tasks in customizable sections
+
+### ⚡ **Performance & UX**
 - **Efficient caching**: Stores project/section IDs to minimize API calls
-- **Clean UI**: Simple, responsive options page
+- **Instant feedback**: Badge updates immediately when visiting properties
+- **Clean interface**: Simple, responsive options page
 - **Privacy-focused**: API token stored locally only
+
+---
+
+## 🎯 How It Works
+
+### Visual Status System
+The extension uses an intuitive badge system:
+
+| Badge | Status | Meaning |
+|-------|--------|---------|
+| ✅ | **Success** | Task created or already exists (green) |
+| ✓ | **Completed** | Property was already completed (gray) |
+| 🔄 | **Processing** | Adding to Todoist (gray) |
+| 🔗 | **Invalid Page** | Not on a property listing (red) |
+| 🔑 | **Token Needed** | Configure API token (orange) |
+| 📁 | **Setup Required** | Project/section setup needed (orange) |
+
+### User Experience Flow
+1. **Browse** ImmoMetrica properties normally
+2. **See instant status** - badge shows if property is already tracked
+3. **One-click adding** - click extension icon to add interesting properties  
+4. **No duplicates** - smart detection prevents re-adding existing tasks
+5. **Organized workflow** - all properties neatly organized in Todoist
+
+---
 
 ## 🚀 Quick Start
 
-### 1. Installation
+### For Technical Users
 
-1. **Clone the repository**
+1. **Clone and Install**
    ```bash
-   git clone https://github.com/your-username/immometrica-to-todoist.git
+   git clone https://github.com/Justinus22/immometric-to-todoist.git
    cd immometrica-to-todoist
    ```
+   - Load unpacked extension in Chrome (`chrome://extensions/`)
+   - Enable Developer Mode → Load Unpacked → Select folder
 
-2. **Load in Chrome**
-   - Open `chrome://extensions/`
-   - Enable "Developer mode"
-   - Click "Load unpacked" and select the project folder
+2. **Configure**
+   - Get API token from [Todoist Settings → Integrations](https://todoist.com/prefs/integrations)
+   - Right-click extension icon → Options → Add token
 
-### 2. Configuration
-
-1. **Get Todoist API token**
-   - Go to [Todoist Settings → Integrations](https://todoist.com/prefs/integrations)
-   - Copy your API token
-
-2. **Configure extension**
-   - Right-click extension icon → "Options"
-   - Paste API token and click "Save Token"
-
-3. **Setup Todoist workspace**
-   - Create project: **"Akquise"**
+3. **Set Up Todoist Structure**
+   - Create project: **"Akquise"** 
    - Create section: **"Noch nicht angefragt aber interessant"**
+   - Or configure custom names in extension options
 
-### 3. Usage
+### For Non-Technical Users
+📚 **Follow the detailed setup guides above** - they include screenshots and explain every step clearly.
 
-1. **Visit ImmoMetrica property listing**
-   - Navigate to a property page like `https://www.immometrica.com/de/offer/12345`
+---
 
-2. **Click the extension icon**
-   - Property automatically added to Todoist
-   - City extracted and added as label
-   - Status shown via badge on icon
+## 🏗️ Technical Architecture
 
-### Location Detection
+### Modern Chrome Extension
+- **Manifest V3**: Latest Chrome extension standard
+- **ES Modules**: Clean, modular JavaScript architecture  
+- **Service Worker**: Efficient background processing
+- **Content Scripts**: Secure DOM data extraction
 
-The extension extracts city names from property listings:
-
-- **"Brandenburg - City"** → "City" 
-- **"PostalCode, City"** → "City"
-- **Address formats** → extracts city component
-
-Examples:
-- `"16515 Brandenburg - Oranienburg"` → **"Oranienburg"**
-- `"14712 Brandenburg - Rathenow"` → **"Rathenow"**
-- `"Ahornallee 26b, 15526, Bad Saarow"` → **"Bad Saarow"**
-
-Labels are automatically created or reused if they exist.
-
-## 🏗️ Architecture
-
-Clean Manifest V3 structure:
-
-```
-├── manifest.json           # Extension config
-├── service_worker.js       # Background logic 
-├── contentScript.js        # DOM extraction
-## 🔧 Technical Details
+### API Integration
+- **Todoist API v1**: Current unified API version
+- **Intelligent caching**: 24-hour cache for projects/sections
+- **Robust error handling**: Clear user feedback for all error states
+- **Batch operations**: Efficient duplicate checking across projects
 
 ### Supported URLs
 ```
 https://www.immometrica.com/de/offer/*
 ```
 
-### Data Flow
-1. User clicks extension icon
-2. Content script extracts title and location
-3. Service worker resolves project/section (cached)
-4. Creates/finds location label 
-5. Creates task via Todoist API
-6. Shows status badge
+### Data Processing
+1. **Content extraction** from ImmoMetrica property pages
+2. **Location parsing** with intelligent city detection:
+   - `"16515 Brandenburg - Oranienburg"` → **"Oranienburg"**
+   - `"Ahornallee 26b, 15526, Bad Saarow"` → **"Bad Saarow"**
+3. **Duplicate detection** across active and completed tasks
+4. **Label management** with automatic city label creation
 
-### API Integration
-Uses **Todoist API v2**:
-- `GET /projects` - Fetch projects
-- `GET /sections` - Fetch sections  
-- `GET /labels` - Fetch labels
-- `POST /labels` - Create labels
-- `POST /tasks` - Create tasks
+---
 
-## 🎯 Badge Status Codes
+## 🔧 Configuration Options
 
-| Badge | Meaning |
-|-------|---------|
-| OK    | Task created successfully |
-| NO    | Not on a valid property page |
-| TOK   | API token not configured |
-| BAD   | Invalid property data |
-| PRJ   | Project "Akquise" not found |
-| SEC   | Section not found |
-| AUTH  | API authentication failed |
-| NET   | Network/connection error |
-| ERR   | General error |
+### Required Todoist Structure
+- **Project**: "Akquise" (or custom name)
+- **Section**: "Noch nicht angefragt aber interessant" (or custom name)
 
-## �️ Development
+### Customization
+- **Custom project/section names**: Configure in extension options
+- **Flexible setup**: Works with any Todoist project structure
+- **Label preferences**: Automatic city labels can be customized
+
+---
+
+## 🛠️ Development
 
 ### Prerequisites
-- Chrome/Chromium browser
+- Chrome/Chromium browser with Developer Mode
 - Todoist account with API access
+- Basic knowledge of Chrome extension development
 
-### Loading for Development
-1. Clone repository
-2. Open `chrome://extensions/`
-3. Enable "Developer mode"
-4. Click "Load unpacked"
-5. Select project folder
+### Development Setup
+```bash
+# Clone repository
+git clone https://github.com/Justinus22/immometric-to-todoist.git
+cd immometrica-to-todoist
+
+# Load in Chrome
+# 1. Open chrome://extensions/
+# 2. Enable Developer Mode
+# 3. Click "Load unpacked"
+# 4. Select project folder
+```
 
 ### File Structure
-- **`manifest.json`** - Extension metadata and permissions
-- **`service_worker.js`** - Background event handling
-- **`contentScript.js`** - DOM content extraction
-- **`options.html/js`** - Settings interface
-- **`api/todoistApi.js`** - API client with error handling
-- **`utils/storage.js`** - Chrome storage abstraction
-- `POST /labels` - Create new location labels
-- `POST /tasks` - Create new task with labels
+```
+├── manifest.json           # Extension configuration
+├── service_worker.js       # Background logic & API integration
+├── contentScript.js        # DOM content extraction
+├── options.html/js         # Settings interface
+├── api/
+│   └── todoistApi.js      # Todoist API client with v1 integration
+├── utils/
+│   └── storage.js         # Chrome storage abstraction
+└── docs/
+    ├── setup-guide-en.md  # English setup guide
+    └── setup-guide-de.md  # German setup guide
+```
 
-### Storage
-Uses `chrome.storage.local` to store:
-- Todoist API token (encrypted by Chrome)
-- Cached project and section IDs (24h TTL)
+### Key Components
+- **Background Service Worker**: Handles all Todoist API interactions
+- **Content Script**: Extracts property data from ImmoMetrica pages
+- **Options Interface**: User-friendly configuration panel
+- **Storage Layer**: Encrypted local storage for tokens and cache
 
-**Note**: Location labels are managed dynamically - the extension will automatically create labels for new cities as they are encountered.
-
-## 🎯 Badge States
-
-The extension provides visual feedback via badge icons:
+---
 
 ## 🔍 Troubleshooting
 
-### Common Issues
+### Quick Fixes
 
-**"TOK" badge** - Add API token in extension options  
-**"PRJ" badge** - Create "Akquise" project in Todoist  
-**"SEC" badge** - Create section "Noch nicht angefragt aber interessant"  
-**"NO" badge** - Visit a valid ImmoMetrica property page  
-**"AUTH" badge** - Check API token validity  
+| Problem | Solution |
+|---------|----------|
+| 🔑 Token error | Add valid API token in Options |
+| 📁 Project error | Create "Akquise" project in Todoist |
+| 🔗 Page error | Visit valid ImmoMetrica property page |
+| ❌ Network error | Check internet connection |
+| Extension missing | Check if enabled in `chrome://extensions/` |
 
-### Required Setup
-1. Project: **"Akquise"** 
-2. Section: **"Noch nicht angefragt aber interessant"**
+### Detailed Support
+- **Setup issues**: Follow the detailed setup guides linked above
+- **API problems**: Verify token at [Todoist Integrations](https://todoist.com/prefs/integrations)
+- **Bug reports**: [GitHub Issues](https://github.com/Justinus22/immometric-to-todoist/issues)
+
+---
+
+## 📈 Recent Updates
+
+### v2.0 - Smart Duplicate Detection
+- ✅ **Completed task awareness**: Detects previously completed properties
+- ✅ **Unified UX**: Same green checkmark for new and existing tasks
+- ✅ **Performance**: Chunked API calls for better reliability
+- ✅ **Visual improvements**: Clean badge system with intuitive colors
+
+### v1.5 - Enhanced User Experience  
+- ✅ **Instant feedback**: Badge updates when visiting properties
+- ✅ **Persistent state**: Remembers status across tab switches
+- ✅ **Modern design**: Updated icons and color scheme
+
+---
 
 ## 📝 License
 
@@ -173,6 +223,18 @@ MIT License - see [LICENSE](LICENSE) file for details.
 3. Commit changes (`git commit -m 'Add amazing feature'`)
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open Pull Request
+
+---
+
+## 🏆 Perfect For
+
+- **Real estate investors** researching properties on ImmoMetrica
+- **Property managers** tracking potential acquisitions  
+- **Real estate agents** organizing client property searches
+- **Anyone** who wants seamless property-to-task workflow
+
+**Ready to streamline your property research workflow?**  
+📖 **[Start with the Setup Guide](docs/setup-guide-en.md)**
 
 ---
 
