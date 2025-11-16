@@ -1,19 +1,13 @@
-/**
- * Background Service Worker - Immometrica to Todoist Extension
- * Handles task creation from property listings
- */
-
+// Background Service Worker - Immometrica to Todoist Extension
 import { getToken, getCache, setCache } from './utils/storage.js';
 import { getProjects, getSections, getLabels, createLabel, createTask, TodoistApiError } from './api/todoistApi.js';
 
-// Target project and section in Todoist
 const CONFIG = {
   PROJECT_NAME: 'Akquise',
   SECTION_NAME: 'Noch nicht angefragt aber interessant',
   BADGE_TIMEOUT: 3000,
 };
 
-// Badge states with colors and messages
 const BADGES = {
   OK: { text: 'OK', color: '#198754' },
   ERROR: { text: 'ERR', color: '#dc3545' },
@@ -26,9 +20,6 @@ const BADGES = {
   NETWORK: { text: 'NET', color: '#dc3545' },
 };
 
-/**
- * Display status badge temporarily
- */
 function showBadge(type) {
   const badge = BADGES[type] || BADGES.ERROR;
   chrome.action.setBadgeText({ text: badge.text });
@@ -36,39 +27,25 @@ function showBadge(type) {
   setTimeout(() => chrome.action.setBadgeText({ text: '' }), CONFIG.BADGE_TIMEOUT);
 }
 
-/**
- * Validate if URL is an ImmoMetrica offer page
- */
 function isOfferUrl(url) {
   return /^https:\/\/www\.immometrica\.com\/de\/offer\/\d+/.test(url);
 }
 
-/**
- * Find or retrieve cached project/section IDs
- */
+// Find or retrieve cached project/section IDs
 async function resolveProjectAndSection(token) {
   const cache = await getCache();
-  
   if (cache?.projectId && cache?.sectionId) {
     return { projectId: cache.projectId, sectionId: cache.sectionId };
   }
 
-  // Fetch fresh data
   const projects = await getProjects(token);
   const project = projects.find(p => p.name === CONFIG.PROJECT_NAME);
-  
-  if (!project) {
-    throw new Error(`Project "${CONFIG.PROJECT_NAME}" not found`);
-  }
+  if (!project) throw new Error(`Project "${CONFIG.PROJECT_NAME}" not found`);
 
   const sections = await getSections(token, project.id);
   const section = sections.find(s => s.name === CONFIG.SECTION_NAME);
-  
-  if (!section) {
-    throw new Error(`Section "${CONFIG.SECTION_NAME}" not found`);
-  }
+  if (!section) throw new Error(`Section "${CONFIG.SECTION_NAME}" not found`);
 
-  // Cache the results
   await setCache({
     projectId: project.id,
     sectionId: section.id,
@@ -80,53 +57,33 @@ async function resolveProjectAndSection(token) {
   return { projectId: project.id, sectionId: section.id };
 }
 
-/**
- * Find or create a label for the given location
- * Returns true if label exists or was created successfully
- */
+// Find or create location label
 async function resolveLocationLabel(token, location) {
-  if (!location) {
-    return false;
-  }
+  if (!location) return false;
   
   try {
-    // Check if label already exists
     const labels = await getLabels(token);
     const existingLabel = labels.find(l => l.name === location);
     
-    if (existingLabel) {
-      console.log(`Found existing label: ${existingLabel.name}`);
-      return true;
-    }
+    if (existingLabel) return true;
     
-    console.log(`Creating new label: "${location}"`);
-    // Create new label
     const newLabel = await createLabel(token, { name: location });
-    console.log(`Created label: ${newLabel.name}`);
-    return newLabel ? true : false;
-    
+    return !!newLabel;
   } catch (error) {
-    console.error(`Failed to resolve location label for "${location}":`, error);
+    console.error(`Failed to resolve location label "${location}":`, error);
     return false;
   }
 }
 
-/**
- * Process scraped listing data and create Todoist task
- */
+// Create Todoist task from listing data
 async function createListingTask({ title, url, location }) {
-  if (!title || !url) {
-    throw new Error('Missing title or URL from scraped data');
-  }
+  if (!title || !url) throw new Error('Missing title or URL');
 
   const token = await getToken();
-  if (!token) {
-    throw new Error('API token not configured');
-  }
+  if (!token) throw new Error('API token not configured');
 
   const { projectId, sectionId } = await resolveProjectAndSection(token);
 
-  // Prepare task data
   const taskData = {
     content: title,
     description: url,
@@ -134,25 +91,14 @@ async function createListingTask({ title, url, location }) {
     section_id: sectionId,
   };
 
-  // Add location label if available
-  if (location) {
-    console.log(`Adding location label: "${location}"`);
-    const labelExists = await resolveLocationLabel(token, location);
-    if (labelExists) {
-      // In API v2, labels are an array of label names, not IDs
-      taskData.labels = [location];
-      console.log(`Successfully added label name: "${location}" for location: ${location}`);
-    } else {
-      console.warn(`Failed to create/find label for location: "${location}"`);
-    }
+  if (location && await resolveLocationLabel(token, location)) {
+    taskData.labels = [location];
   }
 
   await createTask(token, taskData);
 }
 
-/**
- * Handle extension icon click
- */
+// Handle extension icon click
 async function handleIconClick(tab) {
   try {
     if (!tab?.url || !isOfferUrl(tab.url)) {
@@ -166,21 +112,17 @@ async function handleIconClick(tab) {
       return;
     }
 
-    // Execute content script to extract listing data
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       files: ['contentScript.js'],
     });
-
   } catch (error) {
     console.error('Icon click error:', error);
     showBadge('ERROR');
   }
 }
 
-/**
- * Handle content script messages
- */
+// Handle content script messages
 async function handleMessage(message) {
   if (message.type !== 'SCRAPE_RESULT') return;
 
@@ -194,16 +136,12 @@ async function handleMessage(message) {
 
     await createListingTask({ title, url, location });
     showBadge('OK');
-
   } catch (error) {
     console.error('Message handling error:', error);
     
     if (error instanceof TodoistApiError) {
-      switch (error.type) {
-        case 'AUTH': showBadge('AUTH'); break;
-        case 'NETWORK': showBadge('NETWORK'); break;
-        default: showBadge('ERROR');
-      }
+      showBadge(error.type === 'AUTH' ? 'AUTH' : 
+                error.type === 'NETWORK' ? 'NETWORK' : 'ERROR');
     } else if (error.message.includes('Project')) {
       showBadge('PROJECT');
     } else if (error.message.includes('Section')) {

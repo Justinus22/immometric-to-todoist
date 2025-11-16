@@ -1,21 +1,6 @@
-/**
- * Options Page - Todoist Extension Settings
- * Modern settings interface with improved UX
- */
+// Options Page - Todoist Extension Settings
+import { getToken, setToken, clearToken, clearCache, getCache } from './utils/storage.js';
 
-import { 
-  getToken, 
-  setToken, 
-  clearToken, 
-  clearCache, 
-  getCache,
-  getStorageStats,
-  clearAllData 
-} from './utils/storage.js';
-
-/**
- * DOM elements
- */
 const elements = {
   tokenInput: document.getElementById('token'),
   saveBtn: document.getElementById('saveBtn'),
@@ -26,74 +11,43 @@ const elements = {
   cacheDetails: document.getElementById('cacheDetails'),
 };
 
-/**
- * Display status message with auto-hide
- */
-function showStatus(message, type = 'info', duration = 5000) {
+function showStatus(message, type = 'success') {
   const { status } = elements;
-  
   status.textContent = message;
   status.className = `status ${type} show`;
-  
-  // Auto-hide after duration
-  setTimeout(() => {
-    status.classList.remove('show');
-  }, duration);
+  setTimeout(() => status.classList.remove('show'), 3000);
 }
 
-/**
- * Format cache age for display
- */
 function formatCacheAge(timestamp) {
   if (!timestamp) return 'Unknown';
-  
   const age = Date.now() - timestamp;
   const hours = Math.floor(age / (1000 * 60 * 60));
   const minutes = Math.floor((age % (1000 * 60 * 60)) / (1000 * 60));
-  
-  if (hours > 0) {
-    return `${hours}h ${minutes}m ago`;
-  }
-  return `${minutes}m ago`;
+  return hours > 0 ? `${hours}h ${minutes}m ago` : `${minutes}m ago`;
 }
 
-/**
- * Update cache information display
- */
 async function updateCacheDisplay() {
   try {
     const cache = await getCache();
-    const { cacheInfo, cacheDetails } = elements;
-    
     if (cache) {
-      const ageDisplay = formatCacheAge(cache.timestamp);
-      
-      cacheDetails.innerHTML = `
+      elements.cacheDetails.innerHTML = `
         <div><strong>Project:</strong> ${cache.projectName || cache.projectId}</div>
         <div><strong>Section:</strong> ${cache.sectionName || cache.sectionId}</div>
-        <div><strong>Cached:</strong> ${ageDisplay}</div>
+        <div><strong>Cached:</strong> ${formatCacheAge(cache.timestamp)}</div>
       `;
-      cacheInfo.style.display = 'block';
+      elements.cacheInfo.style.display = 'block';
     } else {
-      cacheInfo.style.display = 'none';
+      elements.cacheInfo.style.display = 'none';
     }
   } catch (error) {
     console.error('Failed to update cache display:', error);
   }
 }
 
-/**
- * Validate token format (basic check)
- */
 function validateToken(token) {
-  return token && 
-         token.length >= 40 && 
-         /^[a-f0-9]+$/i.test(token);
+  return token && token.length >= 40 && /^[a-f0-9]+$/i.test(token);
 }
 
-/**
- * Save token handler
- */
 async function handleSaveToken() {
   const token = elements.tokenInput.value.trim();
   
@@ -104,94 +58,68 @@ async function handleSaveToken() {
   }
   
   if (!validateToken(token)) {
-    showStatus('Token format appears invalid (should be 40+ hex characters)', 'error');
+    showStatus('Token format appears invalid', 'error');
     elements.tokenInput.focus();
     return;
   }
   
   try {
     await setToken(token);
-    showStatus('Token saved successfully', 'success');
+    showStatus('Token saved successfully');
   } catch (error) {
     console.error('Save token error:', error);
     showStatus('Failed to save token', 'error');
   }
 }
 
-/**
- * Clear token handler
- */
 async function handleClearToken() {
-  if (!confirm('Are you sure you want to clear the API token?')) {
-    return;
-  }
+  if (!confirm('Clear the API token?')) return;
   
   try {
     await clearToken();
     elements.tokenInput.value = '';
-    showStatus('Token cleared', 'success');
+    showStatus('Token cleared');
   } catch (error) {
     console.error('Clear token error:', error);
     showStatus('Failed to clear token', 'error');
   }
 }
 
-/**
- * Clear cache handler
- */
 async function handleClearCache() {
-  if (!confirm('Are you sure you want to clear the project/section cache?')) {
-    return;
-  }
+  if (!confirm('Clear the project/section cache?')) return;
   
   try {
     await clearCache();
     await updateCacheDisplay();
-    showStatus('Cache cleared successfully', 'success');
+    showStatus('Cache cleared');
   } catch (error) {
     console.error('Clear cache error:', error);
     showStatus('Failed to clear cache', 'error');
   }
 }
 
-/**
- * Initialize page
- */
 async function init() {
   try {
-    // Load existing token
     const token = await getToken();
-    if (token) {
-      elements.tokenInput.value = token;
-    }
+    if (token) elements.tokenInput.value = token;
     
-    // Update cache display
     await updateCacheDisplay();
     
-    // Set up event listeners
     elements.saveBtn.addEventListener('click', handleSaveToken);
     elements.clearTokenBtn.addEventListener('click', handleClearToken);
     elements.clearCacheBtn.addEventListener('click', handleClearCache);
     
-    // Handle Enter key in token input
     elements.tokenInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        handleSaveToken();
-      }
+      if (event.key === 'Enter') handleSaveToken();
     });
     
-    // Focus token input if empty
-    if (!token) {
-      elements.tokenInput.focus();
-    }
-    
+    if (!token) elements.tokenInput.focus();
   } catch (error) {
     console.error('Initialization error:', error);
     showStatus('Failed to initialize settings', 'error');
   }
 }
 
-// Initialize when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {

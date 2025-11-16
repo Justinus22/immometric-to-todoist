@@ -1,27 +1,18 @@
-/**
- * Storage Utilities - Chrome Extension Local Storage
- * Modern wrapper for chrome.storage.local with type safety and validation
- */
-
-// Storage keys
+// Chrome Extension Storage Utilities
 const KEYS = {
   TOKEN: 'todoistToken',
   CACHE: 'todoistCache',
 };
 
-// Cache expiration time (24 hours)
-const CACHE_DURATION = 24 * 60 * 60 * 1000;
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
-/**
- * Generic storage getter with optional validation
- */
-async function getStorageItem(key, validator = null) {
+// Generic storage operations
+async function getStorageItem(key, validator) {
   try {
     const result = await chrome.storage.local.get([key]);
     const value = result[key] || null;
     
     if (value && validator && !validator(value)) {
-      console.warn(`Invalid data for key ${key}, removing`);
       await chrome.storage.local.remove([key]);
       return null;
     }
@@ -33,9 +24,6 @@ async function getStorageItem(key, validator = null) {
   }
 }
 
-/**
- * Generic storage setter
- */
 async function setStorageItem(key, value) {
   try {
     await chrome.storage.local.set({ [key]: value });
@@ -45,9 +33,6 @@ async function setStorageItem(key, value) {
   }
 }
 
-/**
- * Generic storage remover
- */
 async function removeStorageItem(key) {
   try {
     await chrome.storage.local.remove([key]);
@@ -56,23 +41,16 @@ async function removeStorageItem(key) {
   }
 }
 
-/**
- * Validate cache object structure and freshness
- */
+// Validators
 function validateCache(cache) {
-  return (
-    cache &&
-    typeof cache === 'object' &&
-    cache.projectId &&
-    cache.sectionId &&
-    cache.timestamp &&
-    (Date.now() - cache.timestamp) < CACHE_DURATION
-  );
+  return cache &&
+         typeof cache === 'object' &&
+         cache.projectId &&
+         cache.sectionId &&
+         cache.timestamp &&
+         (Date.now() - cache.timestamp) < CACHE_DURATION;
 }
 
-/**
- * Validate token (basic non-empty string check)
- */
 function validateToken(token) {
   return typeof token === 'string' && token.length > 0;
 }
@@ -86,9 +64,6 @@ export const getCache = () => getStorageItem(KEYS.CACHE, validateCache);
 export const setCache = (cache) => setStorageItem(KEYS.CACHE, { ...cache, timestamp: Date.now() });
 export const clearCache = () => removeStorageItem(KEYS.CACHE);
 
-/**
- * Clear all extension data
- */
 export async function clearAllData() {
   try {
     await chrome.storage.local.clear();
@@ -97,9 +72,6 @@ export async function clearAllData() {
   }
 }
 
-/**
- * Get storage usage stats
- */
 export async function getStorageStats() {
   try {
     const data = await chrome.storage.local.get(null);
@@ -107,9 +79,7 @@ export async function getStorageStats() {
       totalItems: Object.keys(data).length,
       hasToken: !!data[KEYS.TOKEN],
       hasCache: !!data[KEYS.CACHE],
-      cacheAge: data[KEYS.CACHE]?.timestamp 
-        ? Date.now() - data[KEYS.CACHE].timestamp 
-        : null,
+      cacheAge: data[KEYS.CACHE]?.timestamp ? Date.now() - data[KEYS.CACHE].timestamp : null,
     };
   } catch (error) {
     console.error('Failed to get storage stats:', error);

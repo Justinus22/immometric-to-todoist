@@ -1,11 +1,7 @@
-/**
- * Modern Todoist API v2 Client
- * Minimal wrapper for essential Todoist operations
- */
-
+// Todoist API v2 Client
 const API_BASE = 'https://api.todoist.com/rest/v2';
 
-class TodoistApiError extends Error {
+export class TodoistApiError extends Error {
   constructor(message, type, status, url) {
     super(message);
     this.name = 'TodoistApiError';
@@ -15,9 +11,6 @@ class TodoistApiError extends Error {
   }
 }
 
-/**
- * Core HTTP client for Todoist API
- */
 class TodoistClient {
   constructor(token) {
     this.token = token;
@@ -54,7 +47,6 @@ class TodoistClient {
 
       if (response.status === 204) return null;
       return await response.json().catch(() => null);
-      
     } catch (error) {
       if (error instanceof TodoistApiError) throw error;
       throw new TodoistApiError(error.message, 'NETWORK');
@@ -94,46 +86,31 @@ class TodoistClient {
   }
 
   async createLabel(label) {
-    return this.request('/labels', {
-      method: 'POST',
-      body: label,
-    });
+    return this.request('/labels', { method: 'POST', body: label });
   }
 
   async createTask(task) {
-    return this.request('/tasks', {
-      method: 'POST',
-      body: task,
-    });
+    return this.request('/tasks', { method: 'POST', body: task });
   }
 }
 
-/**
- * Legacy exports for backward compatibility
- */
+// Simple function exports for backward compatibility
 export async function getProjects(token) {
-  const client = new TodoistClient(token);
-  return client.getProjects();
+  return new TodoistClient(token).getProjects();
 }
 
 export async function getSections(token, projectId) {
-  const client = new TodoistClient(token);
-  return client.getSections(projectId);
+  return new TodoistClient(token).getSections(projectId);
 }
 
 export async function getLabels(token) {
-  const client = new TodoistClient(token);
-  return client.getLabels();
+  return new TodoistClient(token).getLabels();
 }
 
 export async function createLabel(token, payload) {
-  const client = new TodoistClient(token);
-  return client.createLabel(payload);
+  return new TodoistClient(token).createLabel(payload);
 }
 
 export async function createTask(token, payload) {
-  const client = new TodoistClient(token);
-  return client.createTask(payload);
+  return new TodoistClient(token).createTask(payload);
 }
-
-export { TodoistClient, TodoistApiError };
