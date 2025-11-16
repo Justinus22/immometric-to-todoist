@@ -57,10 +57,17 @@ A modern Chrome extension that lets you add ImmoMetrica property listings to Tod
 
 ### How Location Detection Works
 
-The extension automatically extracts the city name from the property listing using these patterns:
-- **"Brandenburg - CityName"** → extracts "CityName" (e.g., "Oranienburg")  
-- **"12345 CityName"** → extracts "CityName" from postal code + city format
-- **Automatic labeling**: Creates Todoist labels like "Oranienburg", "Storkow", "Fürstenwalde"
+The extension automatically extracts the city name from property listings using these patterns:
+
+1. **"Brandenburg - CityName"** → extracts "CityName" (e.g., "Oranienburg", "Rathenow")  
+2. **"PostalCode, CityName"** → extracts "CityName" (e.g., "15526, Bad Saarow")
+3. **"Street, PostalCode CityName"** → extracts "CityName" from address format
+4. **Duplicate removal**: Handles repeated text patterns automatically
+
+**Examples:**
+- `"Bötzower Platz, 16515 Brandenburg - Oranienburg"` → **"Oranienburg"**
+- `"14712 Brandenburg - Rathenow 14712 Brandenburg - Rathenow"` → **"Rathenow"**  
+- `"Ahornallee 26b, 15526, Bad Saarow"` → **"Bad Saarow"**
 
 If a label for the city already exists, it will be reused. If not, a new label is created automatically.
 

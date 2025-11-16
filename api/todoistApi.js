@@ -3,7 +3,7 @@
  * Minimal wrapper for essential Todoist operations
  */
 
-const API_BASE = 'https://api.todoist.com/api/v1';
+const API_BASE = 'https://api.todoist.com/rest/v1';
 
 class TodoistApiError extends Error {
   constructor(message, type, status, url) {

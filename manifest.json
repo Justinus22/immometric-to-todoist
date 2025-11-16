@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ImmoMetrica → Todoist",
-  "version": "1.0.0",
-  "description": "Add ImmoMetrica property listings to Todoist with one click",
+  "version": "1.1.0",
+  "description": "Add ImmoMetrica property listings to Todoist with location labels",
   
   "action": {
     "default_title": "Add property to Todoist"
@@ -20,7 +20,8 @@
   ],
   
   "host_permissions": [
-    "https://www.immometrica.com/*"
+    "https://www.immometrica.com/*",
+    "https://api.todoist.com/*"
   ],
   
   "options_page": "options.html"

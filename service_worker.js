@@ -84,7 +84,9 @@ async function resolveProjectAndSection(token) {
  * Find or create a label for the given location
  */
 async function resolveLocationLabel(token, location) {
-  if (!location) return null;
+  if (!location) {
+    return null;
+  }
   
   try {
     // Check if label already exists
@@ -92,15 +94,18 @@ async function resolveLocationLabel(token, location) {
     const existingLabel = labels.find(l => l.name === location);
     
     if (existingLabel) {
+      console.log(`Found existing label: ${existingLabel.name} (ID: ${existingLabel.id})`);
       return existingLabel.id;
     }
     
+    console.log(`Creating new label: "${location}"`);
     // Create new label
     const newLabel = await createLabel(token, { name: location });
+    console.log(`Created label: ${newLabel.name} (ID: ${newLabel.id})`);
     return newLabel?.id || null;
     
   } catch (error) {
-    console.warn(`Failed to resolve location label for "${location}":`, error);
+    console.error(`Failed to resolve location label for "${location}":`, error);
     return null;
   }
 }
@@ -130,9 +135,14 @@ async function createListingTask({ title, url, location }) {
 
   // Add location label if available
   if (location) {
+    console.log(`Adding location label: "${location}"`);
     const labelId = await resolveLocationLabel(token, location);
     if (labelId) {
-      taskData.label_ids = [labelId];
+      // Ensure label_ids is an array of integers
+      taskData.label_ids = [parseInt(labelId, 10)];
+      console.log(`Successfully added label ID: ${labelId} for location: ${location}`);
+    } else {
+      console.warn(`Failed to create/find label for location: "${location}"`);
     }
   }
 
