@@ -2,6 +2,7 @@
 const KEYS = {
   TOKEN: 'todoistToken',
   CACHE: 'todoistCache',
+  PROJECT_CONFIG: 'projectConfig', // Stores selected project and section IDs
 };
 
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
@@ -55,6 +56,13 @@ function validateToken(token) {
   return typeof token === 'string' && token.length > 0;
 }
 
+function validateProjectConfig(config) {
+  return config &&
+         typeof config === 'object' &&
+         (config.projectId === null || typeof config.projectId === 'string') &&
+         (config.sectionId === null || typeof config.sectionId === 'string');
+}
+
 // Public API
 export const getToken = () => getStorageItem(KEYS.TOKEN, validateToken);
 export const setToken = (token) => setStorageItem(KEYS.TOKEN, token);
@@ -63,6 +71,10 @@ export const clearToken = () => removeStorageItem(KEYS.TOKEN);
 export const getCache = () => getStorageItem(KEYS.CACHE, validateCache);
 export const setCache = (cache) => setStorageItem(KEYS.CACHE, { ...cache, timestamp: Date.now() });
 export const clearCache = () => removeStorageItem(KEYS.CACHE);
+
+export const getProjectConfig = () => getStorageItem(KEYS.PROJECT_CONFIG, validateProjectConfig);
+export const setProjectConfig = (config) => setStorageItem(KEYS.PROJECT_CONFIG, config);
+export const clearProjectConfig = () => removeStorageItem(KEYS.PROJECT_CONFIG);
 
 export async function clearAllData() {
   try {

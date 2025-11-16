@@ -1,5 +1,5 @@
 // Background Service Worker - Immometrica to Todoist Extension
-import { getToken, getCache, setCache } from './utils/storage.js';
+import { getToken, getCache, setCache, getProjectConfig } from './utils/storage.js';
 import { getProjects, getSections, getLabels, createLabel, createTask, getTasks, findTaskByDescription, findTaskInProject, TodoistApiError } from './api/todoistApi.js';
 
 // Tab state tracking
@@ -7,8 +7,8 @@ const tabStates = new Map(); // tabId -> { url, badgeType, isDuplicate, existing
 const processingTabs = new Set(); // Track tabs currently being processed
 
 const CONFIG = {
-  PROJECT_NAME: 'Akquise',
-  SECTION_NAME: 'Noch nicht angefragt aber interessant',
+  PROJECT_NAME: 'Akquise', // Fallback for legacy configs  
+  SECTION_NAME: 'Noch nicht angefragt aber interessant', // Fallback for legacy configs
   BADGE_TIMEOUT: 3000,
 };
 
@@ -140,13 +140,66 @@ function isOfferUrl(url) {
   return /^https:\/\/www\.immometrica\.com\/de\/offer\/\d+/.test(url);
 }
 
-// Find or retrieve cached project/section IDs
+// Find or retrieve cached project/section IDs based on user configuration
 async function resolveProjectAndSection(token) {
+  // Check for existing cache
   const cache = await getCache();
-  if (cache?.projectId && cache?.sectionId) {
+  if (cache?.projectId !== undefined && cache?.sectionId !== undefined) {
     return { projectId: cache.projectId, sectionId: cache.sectionId };
   }
 
+  // Get user configuration
+  const config = await getProjectConfig();
+  
+  let projectId = null;
+  let sectionId = null;
+  let projectName = 'Inbox';
+  let sectionName = 'No section';
+  
+  if (config && config.projectId) {
+    // User has configured a specific project
+    projectId = config.projectId;
+    sectionId = config.sectionId || null;
+    
+    // Get project and section names for caching
+    try {
+      const projects = await getProjects(token);
+      const project = projects.find(p => p.id === projectId);
+      if (!project) throw new Error(`Configured project not found`);
+      
+      projectName = project.name;
+      
+      if (sectionId) {
+        const sections = await getSections(token, projectId);
+        const section = sections.find(s => s.id === sectionId);
+        if (!section) throw new Error(`Configured section not found`);
+        sectionName = section.name;
+      }
+    } catch (error) {
+      // Fall back to legacy behavior if configured project/section not found
+      console.warn('Configured project/section not found, falling back to legacy config:', error);
+      return await resolveLegacyProjectAndSection(token);
+    }
+  } else {
+    // No configuration - use inbox (projectId = null, sectionId = null)
+    projectId = null;
+    sectionId = null;
+  }
+
+  // Cache the resolved configuration
+  await setCache({
+    projectId,
+    sectionId,
+    projectName,
+    sectionName,
+    timestamp: Date.now(),
+  });
+
+  return { projectId, sectionId };
+}
+
+// Legacy fallback for existing users
+async function resolveLegacyProjectAndSection(token) {
   const projects = await getProjects(token);
   const project = projects.find(p => p.name === CONFIG.PROJECT_NAME);
   if (!project) throw new Error(`Project "${CONFIG.PROJECT_NAME}" not found`);
@@ -203,9 +256,17 @@ async function createListingTask({ title, url, location }) {
   const taskData = {
     content: title,
     description: url,
-    project_id: projectId,
-    section_id: sectionId,
   };
+
+  // Only add project_id if not using inbox (null means inbox)
+  if (projectId) {
+    taskData.project_id = projectId;
+  }
+
+  // Only add section_id if specified (null means no section)
+  if (sectionId) {
+    taskData.section_id = sectionId;
+  }
 
   if (location && await resolveLocationLabel(token, location)) {
     taskData.labels = [location];

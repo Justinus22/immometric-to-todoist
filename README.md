@@ -31,10 +31,11 @@ A smart Chrome extension that seamlessly integrates ImmoMetrica property listing
 - **Seamless UX**: Same green checkmark whether newly added or already exists
 - **Persistent state**: Remembers task status when revisiting properties
 
-### 🏷️ **Automatic Organization**
+### 🏷️ **Flexible Organization**
+- **Configurable projects**: Choose any Todoist project or use Inbox
+- **Optional sections**: Organize tasks within projects as needed
+- **Default to Inbox**: Works immediately without project setup
 - **Location labels**: Creates and assigns city labels automatically
-- **Project structure**: Organizes properties in dedicated Todoist project
-- **Section management**: Groups tasks in customizable sections
 
 ### ⚡ **Performance & UX**
 - **Efficient caching**: Stores project/section IDs to minimize API calls
@@ -83,10 +84,10 @@ The extension uses an intuitive badge system:
    - Get API token from [Todoist Settings → Integrations](https://todoist.com/prefs/integrations)
    - Right-click extension icon → Options → Add token
 
-3. **Set Up Todoist Structure**
-   - Create project: **"Akquise"** 
-   - Create section: **"Noch nicht angefragt aber interessant"**
-   - Or configure custom names in extension options
+3. **Set Up Todoist Structure (Optional)**
+   - **Default**: Tasks go to Inbox (no setup needed)
+   - **Custom**: Configure project/section in extension options
+   - **Legacy**: Existing "Akquise" project users supported
 
 ### For Non-Technical Users
 📚 **Follow the detailed setup guides above** - they include screenshots and explain every step clearly.
@@ -125,13 +126,15 @@ https://www.immometrica.com/de/offer/*
 ## 🔧 Configuration Options
 
 ### Required Todoist Structure
-- **Project**: "Akquise" (or custom name)
-- **Section**: "Noch nicht angefragt aber interessant" (or custom name)
+- **Default**: No setup required - uses Inbox
+- **Custom**: Any project and section via extension options
+- **Legacy**: "Akquise" project still supported for existing users
 
 ### Customization
-- **Custom project/section names**: Configure in extension options
-- **Flexible setup**: Works with any Todoist project structure
-- **Label preferences**: Automatic city labels can be customized
+- **Flexible project/section**: Configure any Todoist project and section via options page
+- **Inbox support**: Default behavior uses Todoist Inbox with no section
+- **Legacy compatibility**: Automatic fallback for existing "Akquise" project users
+- **Label management**: Automatic city labels work with any project structure
 
 ---
 
@@ -185,7 +188,7 @@ cd immometrica-to-todoist
 | Problem | Solution |
 |---------|----------|
 | 🔑 Token error | Add valid API token in Options |
-| 📁 Project error | Create "Akquise" project in Todoist |
+| 📁 Project error | Configure project in Options or use default Inbox |
 | 🔗 Page error | Visit valid ImmoMetrica property page |
 | ❌ Network error | Check internet connection |
 | Extension missing | Check if enabled in `chrome://extensions/` |

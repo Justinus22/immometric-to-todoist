@@ -59,6 +59,46 @@
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
 
+    select {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+      background: white;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    select:disabled {
+      background: #f3f4f6;
+      color: #6b7280;
+      cursor: not-allowed;
+    }
+
+    .form-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-section h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0 0 1rem;
+      color: #374151;
+    }
+
+    .help-text {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: -0.5rem;
+      margin-bottom: 1rem;
+    }
+
     .buttons {
       display: flex;
       gap: 0.75rem;
@@ -133,18 +173,52 @@
       Configure your Todoist integration. Your API token is stored locally only.
     </p>
 
-    <label for="token">Todoist API Token</label>
-    <input 
-      id="token" 
-      type="password" 
-      placeholder="Paste your API token here"
-      autocomplete="off"
-    />
+    <div class="form-section">
+      <h2>API Configuration</h2>
+      <label for="token">Todoist API Token</label>
+      <input 
+        id="token" 
+        type="password" 
+        placeholder="Paste your API token here"
+        autocomplete="off"
+      />
+      <div class="help-text">
+        Get your token from <a href="https://todoist.com/prefs/integrations" target="_blank">Todoist Settings → Integrations</a>
+      </div>
 
-    <div class="buttons">
-      <button id="saveBtn" class="btn-primary">Save Token</button>
-      <button id="clearTokenBtn" class="btn-secondary">Clear Token</button>
-      <button id="clearCacheBtn" class="btn-secondary">Clear Cache</button>
+      <div class="buttons">
+        <button id="saveBtn" class="btn-primary">Save Token</button>
+        <button id="clearTokenBtn" class="btn-secondary">Clear Token</button>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h2>Project & Section</h2>
+      <div class="help-text">
+        Choose where new property tasks should be added. Defaults to Inbox with no section.
+      </div>
+
+      <label for="project">Project</label>
+      <select id="project" disabled>
+        <option value="">Loading projects...</option>
+      </select>
+
+      <label for="section">Section (Optional)</label>
+      <select id="section" disabled>
+        <option value="">Select a project first</option>
+      </select>
+
+      <div class="buttons">
+        <button id="saveProjectBtn" class="btn-primary" disabled>Save Configuration</button>
+        <button id="resetProjectBtn" class="btn-secondary" disabled>Reset to Inbox</button>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h2>Cache Management</h2>
+      <div class="buttons">
+        <button id="clearCacheBtn" class="btn-secondary">Clear Cache</button>
+      </div>
     </div>
 
     <div id="status" class="status"></div>

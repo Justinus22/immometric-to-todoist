@@ -75,33 +75,44 @@ Diese Anleitung führt Sie Schritt für Schritt durch die Einrichtung der Chrome
    - Die Erweiterung wird automatisch Ihren Token testen
    - Bei Erfolg sehen Sie Ihre Todoist-Projekte aufgelistet
 
-## 📁 Schritt 5: Todoist-Projekt einrichten
+## 📁 Schritt 5: Projekt und Bereich konfigurieren
 
-### Option A: Automatische Einrichtung (Empfohlen)
+Die Erweiterung erlaubt es Ihnen jetzt anzupassen, wo Immobilienaufgaben hinzugefügt werden!
 
-1. **Projekt erstellen**:
-   - Klicken Sie in Todoist auf **"+ Projekt hinzufügen"**
-   - Benennen Sie es genau: **"Akquise"**
-   - Wählen Sie eine beliebige Farbe
-   - Klicken Sie **"Hinzufügen"**
+### Standardverhalten (Empfohlen für neue Nutzer)
+- **Projekt**: Eingang (Standard-Todoist-Eingang)
+- **Bereich**: Keiner
+- **Keine Einrichtung erforderlich** - funktioniert sofort nach Hinzufügen Ihres API-Tokens
 
-2. **Abschnitt erstellen**:
-   - Klicken Sie auf Ihr neues "Akquise"-Projekt
-   - Klicken Sie **"+ Abschnitt hinzufügen"**
-   - Benennen Sie ihn genau: **"Noch nicht angefragt aber interessant"**
-   - Klicken Sie **"Abschnitt hinzufügen"**
+### Benutzerdefinierte Projekteinrichtung (Optional)
 
-### Option B: Andere Namen verwenden
+1. **Projektkonfiguration aufrufen**:
+   - Scrollen Sie in den Erweiterungsoptionen zu **"Projekt & Bereich"**
+   - Dieser Bereich ist nur verfügbar, nachdem Sie einen gültigen API-Token hinzugefügt haben
 
-Wenn Sie andere Namen bevorzugen:
+2. **Projekt auswählen**:
+   - Wählen Sie aus der Dropdown-Liste: **"Eingang (Standard)"** oder eines Ihrer Todoist-Projekte
+   - Beispiel: Erstellen und wählen Sie **"Immobilien"** oder **"Immobiliensuche"**
 
-1. **Erstellen Sie Ihr Projekt** mit einem beliebigen Namen
-2. **Erstellen Sie einen Abschnitt** in diesem Projekt
-3. **Konfigurieren Sie die Erweiterung**:
-   - Gehen Sie zurück zu den Erweiterungsoptionen
-   - Wählen Sie Ihr Projekt aus der Dropdown-Liste
-   - Wählen Sie Ihren Abschnitt aus der Dropdown-Liste
-   - Klicken Sie **"Einstellungen speichern"**
+3. **Bereich auswählen** (optional):
+   - Wenn Sie ein Projekt (nicht Eingang) ausgewählt haben, können Sie einen Bereich wählen
+   - Beispiel: **"Zu prüfen"**, **"Interessante Immobilien"** oder **"Nachfassen"**
+   - Lassen Sie **"Kein Bereich"** wenn Sie keine Bereiche verwenden
+
+4. **Konfiguration speichern**:
+   - Klicken Sie **"Konfiguration speichern"**
+   - Sie sehen eine Bestätigung: **"Konfiguration gespeichert: [Projekt] → [Bereich]"**
+
+### Konfigurationsbeispiele
+
+| Anwendungsfall | Projekt | Bereich | Ergebnis |
+|----------------|---------|---------|----------|
+| **Einfach** | Eingang (Standard) | - | Aufgaben gehen in den Haupteingang |
+| **Organisiert** | Immobilien | Zu prüfen | Aufgaben gehen ins "Immobilien"-Projekt, Bereich "Zu prüfen" |
+| **Minimales Projekt** | Immobiliensuche | Kein Bereich | Aufgaben gehen ins "Immobiliensuche"-Projekt, kein Bereich |
+
+### Bestehende Nutzer
+Falls Sie die Erweiterung vorher mit dem fest programmierten "Akquise"-Projekt verwendet haben, funktioniert es automatisch mit Ihrer bestehenden Einrichtung, bis Sie ein neues Projekt konfigurieren.
 
 ## ✅ Schritt 6: Erweiterung testen
 

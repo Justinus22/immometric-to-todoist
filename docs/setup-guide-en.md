@@ -75,33 +75,44 @@ This guide will walk you through setting up the Chrome extension step by step. N
    - The extension will automatically test your token
    - If successful, you'll see your Todoist projects listed
 
-## 📁 Step 5: Set Up Your Todoist Project
+## 📁 Step 5: Configure Your Project and Section
 
-### Option A: Automatic Setup (Recommended)
+The extension now allows you to customize where property tasks are added!
 
-1. **Create the project**:
-   - In Todoist, click **"+ Add project"**
-   - Name it exactly: **"Akquise"**
-   - Choose any color you like
-   - Click **"Add"**
+### Default Behavior (Recommended for New Users)
+- **Project**: Inbox (default Todoist inbox)
+- **Section**: None
+- **No setup required** - works immediately after adding your API token
 
-2. **Create the section**:
-   - Click on your new "Akquise" project
-   - Click **"+ Add section"**
-   - Name it exactly: **"Noch nicht angefragt aber interessant"**
-   - Click **"Add section"**
+### Custom Project Setup (Optional)
 
-### Option B: Use Different Names
+1. **Access project configuration**:
+   - In the extension options, scroll to **"Project & Section"**
+   - This section is only available after adding a valid API token
 
-If you prefer different names:
+2. **Choose your project**:
+   - Select from the dropdown: **"Inbox (Default)"** or any of your Todoist projects
+   - Example: Create and select **"Real Estate"** or **"Property Research"**
 
-1. **Create your project** with any name you want
-2. **Create a section** within that project
-3. **Configure the extension**:
-   - Go back to extension options
-   - Select your project from the dropdown
-   - Select your section from the dropdown
-   - Click **"Save Settings"**
+3. **Choose your section** (optional):
+   - If you selected a project (not Inbox), you can choose a section
+   - Example: **"To Review"**, **"Interesting Properties"**, or **"Follow Up"**
+   - Leave as **"No section"** if you don't use sections
+
+4. **Save your configuration**:
+   - Click **"Save Configuration"**
+   - You'll see confirmation: **"Configuration saved: [Project] → [Section]"**
+
+### Configuration Examples
+
+| Use Case | Project | Section | Result |
+|----------|---------|---------|--------|
+| **Simple** | Inbox (Default) | - | Tasks go to main inbox |
+| **Organized** | Real Estate | To Review | Tasks go to "Real Estate" project, "To Review" section |
+| **Minimal Project** | Property Search | No section | Tasks go to "Property Search" project, no section |
+
+### Legacy Users
+If you previously used the extension with the hardcoded "Akquise" project, it will automatically work with your existing setup until you configure a new project.
 
 ## ✅ Step 6: Test the Extension
 
