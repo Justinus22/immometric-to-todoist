@@ -4,6 +4,7 @@ import { getProjects, getSections, getLabels, createLabel, createTask, getTasks,
 
 // Tab state tracking
 const tabStates = new Map(); // tabId -> { url, badgeType, isDuplicate, existingTask }
+const processingTabs = new Set(); // Track tabs currently being processed
 
 const CONFIG = {
   PROJECT_NAME: 'Akquise',
@@ -101,7 +102,7 @@ function setTabState(tabId, url, badgeType = null, existingTask = null) {
   tabStates.set(tabId, { 
     url, 
     badgeType, 
-    isDuplicate: ['DUPLICATE', 'COMPLETED'].includes(badgeType),
+    isDuplicate: ['ALREADY_ADDED', 'COMPLETED_TASK'].includes(badgeType),
     existingTask 
   });
 }
@@ -124,6 +125,9 @@ async function updateBadgeForActiveTab() {
     const tabState = getTabState(activeTab.id);
     if (tabState?.badgeType) {
       showBadge(tabState.badgeType, true, { tabId: activeTab.id });
+    } else if (!isOfferUrl(activeTab.url)) {
+      // Show NO_URL badge for non-property pages
+      showBadge('NO_URL', true, { tabId: activeTab.id });
     } else {
       clearBadge(activeTab.id);
     }
@@ -218,6 +222,12 @@ async function handleIconClick(tab) {
       return;
     }
 
+    // Prevent double-processing
+    if (processingTabs.has(tab.id)) {
+      console.log('Tab already being processed, skipping...');
+      return;
+    }
+
     const token = await getToken();
     if (!token) {
       showBadge('NO_TOKEN');
@@ -228,10 +238,14 @@ async function handleIconClick(tab) {
     const tabState = getTabState(tab.id);
     if (tabState?.isDuplicate && tabState?.existingTask) {
       // Open existing task in Todoist (works for both active and completed tasks)
+      console.log('Redirecting to existing task:', tabState.existingTask.id);
       const todoistUrl = `https://app.todoist.com/app/task/${tabState.existingTask.id}`;
       await chrome.tabs.create({ url: todoistUrl });
       return; // Badge stays as is
     }
+
+    // Mark tab as being processed
+    processingTabs.add(tab.id);
 
     // No duplicate found or state not yet determined, proceed with scraping
     await chrome.scripting.executeScript({
@@ -241,6 +255,8 @@ async function handleIconClick(tab) {
   } catch (error) {
     console.error('Icon click error:', error);
     showBadge('ERROR');
+    // Clean up processing state on error
+    processingTabs.delete(tab.id);
   }
 }
 
@@ -274,8 +290,8 @@ async function handleTabUpdate(tabId, changeInfo, tab) {
       setTabState(tabId, tab.url);
     }
   } else {
-    // Not on ImmoMetrica offer page - clear state
-    setTabState(tabId, tab.url);
+    // Not on ImmoMetrica offer page - show NO_URL badge
+    setTabState(tabId, tab.url, 'NO_URL');
   }
 
   await updateBadgeForActiveTab();
@@ -356,6 +372,9 @@ async function handleMessage(message, sender) {
     } else {
       showBadge('ERROR');
     }
+  } finally {
+    // Always clean up processing state
+    processingTabs.delete(tabId);
   }
 }
 
