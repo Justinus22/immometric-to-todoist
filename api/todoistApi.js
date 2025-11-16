@@ -1,9 +1,9 @@
 /**
- * Modern Todoist API v1 Client
+ * Modern Todoist API v2 Client
  * Minimal wrapper for essential Todoist operations
  */
 
-const API_BASE = 'https://api.todoist.com/rest/v1';
+const API_BASE = 'https://api.todoist.com/rest/v2';
 
 class TodoistApiError extends Error {
   constructor(message, type, status, url) {

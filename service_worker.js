@@ -82,10 +82,11 @@ async function resolveProjectAndSection(token) {
 
 /**
  * Find or create a label for the given location
+ * Returns true if label exists or was created successfully
  */
 async function resolveLocationLabel(token, location) {
   if (!location) {
-    return null;
+    return false;
   }
   
   try {
@@ -94,19 +95,19 @@ async function resolveLocationLabel(token, location) {
     const existingLabel = labels.find(l => l.name === location);
     
     if (existingLabel) {
-      console.log(`Found existing label: ${existingLabel.name} (ID: ${existingLabel.id})`);
-      return existingLabel.id;
+      console.log(`Found existing label: ${existingLabel.name}`);
+      return true;
     }
     
     console.log(`Creating new label: "${location}"`);
     // Create new label
     const newLabel = await createLabel(token, { name: location });
-    console.log(`Created label: ${newLabel.name} (ID: ${newLabel.id})`);
-    return newLabel?.id || null;
+    console.log(`Created label: ${newLabel.name}`);
+    return newLabel ? true : false;
     
   } catch (error) {
     console.error(`Failed to resolve location label for "${location}":`, error);
-    return null;
+    return false;
   }
 }
 
@@ -136,11 +137,11 @@ async function createListingTask({ title, url, location }) {
   // Add location label if available
   if (location) {
     console.log(`Adding location label: "${location}"`);
-    const labelId = await resolveLocationLabel(token, location);
-    if (labelId) {
-      // Ensure label_ids is an array of integers
-      taskData.label_ids = [parseInt(labelId, 10)];
-      console.log(`Successfully added label ID: ${labelId} for location: ${location}`);
+    const labelExists = await resolveLocationLabel(token, location);
+    if (labelExists) {
+      // In API v2, labels are an array of label names, not IDs
+      taskData.labels = [location];
+      console.log(`Successfully added label name: "${location}" for location: ${location}`);
     } else {
       console.warn(`Failed to create/find label for location: "${location}"`);
     }
