@@ -35,10 +35,6 @@
 
 ### 3. Common Issues
 
-**Issue**: Labels created but not attached to tasks
-- **Cause**: API v1 deprecated, use v2
-- **Solution**: Update API base URL to `https://api.todoist.com/rest/v2`
-
 **Issue**: Location extraction fails
 - **Cause**: Page structure changed or different format
 - **Solution**: Check actual HTML structure on failing pages
