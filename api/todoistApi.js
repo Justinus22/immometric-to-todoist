@@ -6,6 +6,12 @@ const COMPLETED_TASKS_START_DATE = '2025-08-01T00:00:00.000Z';
 const CHUNK_SIZE_DAYS = 90; // 3 months in days
 const API_REQUEST_DELAY = 100; // ms between requests
 
+// Cache for task lists to avoid repeated fetches
+const taskListCache = new Map(); // projectId -> { activeTasks, timestamp }
+const completedTasksCache = new Map(); // projectId -> { completedTasks, timestamp }
+const ACTIVE_TASKS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes for active tasks
+const COMPLETED_TASKS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes for completed tasks (they change less frequently)
+
 export class TodoistApiError extends Error {
   constructor(message, type, status, url) {
     super(message);
@@ -98,25 +104,52 @@ class TodoistClient {
   }
 
   async getTasks(projectId, sectionId) {
+    // Only cache if not filtering by section (full project fetch)
+    if (!sectionId) {
+      const cacheKey = projectId || 'inbox';
+      const cached = taskListCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < ACTIVE_TASKS_CACHE_TTL) {
+        return cached.activeTasks;
+      }
+    }
+
     let endpoint = '/tasks?';
     const params = [];
     if (projectId) params.push(`project_id=${projectId}`);
     if (sectionId) params.push(`section_id=${sectionId}`);
     endpoint += params.join('&');
-    
-    return this.fetchPaged(endpoint);
+
+    const tasks = await this.fetchPaged(endpoint);
+
+    // Cache the result if we fetched the full project
+    if (!sectionId) {
+      const cacheKey = projectId || 'inbox';
+      taskListCache.set(cacheKey, {
+        activeTasks: tasks,
+        timestamp: Date.now()
+      });
+    }
+
+    return tasks;
   }
 
   async getCompletedTasks(projectId) {
+    // Check cache first
+    const cacheKey = projectId || 'inbox';
+    const cached = completedTasksCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < COMPLETED_TASKS_CACHE_TTL) {
+      return cached.completedTasks;
+    }
+
     const now = new Date();
     const startFromDate = new Date(COMPLETED_TASKS_START_DATE);
     const allCompletedTasks = [];
-    
+
     // Calculate how many chunks we need from start date to now
     const timeDiff = now.getTime() - startFromDate.getTime();
     const chunkDuration = CHUNK_SIZE_DAYS * 24 * 60 * 60 * 1000;
     const chunksNeeded = Math.max(1, Math.ceil(timeDiff / chunkDuration));
-    
+
     for (let chunk = 0; chunk < chunksNeeded; chunk++) {
       // Calculate 3-month window, working backwards from now
       const endDate = new Date(now.getTime() - (chunk * chunkDuration));
@@ -124,25 +157,31 @@ class TodoistClient {
         endDate.getTime() - chunkDuration,
         startFromDate.getTime()
       ));
-      
+
       let endpoint = `/tasks/completed/by_completion_date?since=${startDate.toISOString()}&until=${endDate.toISOString()}`;
       if (projectId) endpoint += `&project_id=${projectId}`;
-      
+
       try {
         const chunkResults = await this.fetchPaged(endpoint);
         allCompletedTasks.push(...chunkResults);
-        
+
         // Add delay between requests to respect API rate limits
         if (chunk < chunksNeeded - 1) {
           await new Promise(resolve => setTimeout(resolve, API_REQUEST_DELAY));
         }
-        
+
       } catch (error) {
         console.warn(`Error fetching completed tasks chunk ${chunk + 1}:`, error.message);
         continue;
       }
     }
-    
+
+    // Cache the completed tasks
+    completedTasksCache.set(cacheKey, {
+      completedTasks: allCompletedTasks,
+      timestamp: Date.now()
+    });
+
     return allCompletedTasks;
   }
 
@@ -155,7 +194,7 @@ class TodoistClient {
     return tasks.find(task => task.description?.includes(description));
   }
 
-  async findTaskInProject(projectId, description) {
+  async findTaskInProject(projectId, description, checkCompleted = true) {
     try {
       // Search active tasks first (faster and more common)
       const activeTasks = await this.getTasks(projectId, null);
@@ -164,17 +203,19 @@ class TodoistClient {
         return { found: true, type: 'ACTIVE', task: activeTask };
       }
 
-      // Search completed tasks if not found in active tasks
-      const completedTasks = await this.getCompletedTasks(projectId);
-      const completedTask = this.findTaskByDescription(completedTasks, description);
-      if (completedTask) {
-        return { found: true, type: 'COMPLETED', task: completedTask };
+      // Only search completed tasks if requested (can be expensive)
+      if (checkCompleted) {
+        const completedTasks = await this.getCompletedTasks(projectId);
+        const completedTask = this.findTaskByDescription(completedTasks, description);
+        if (completedTask) {
+          return { found: true, type: 'COMPLETED', task: completedTask };
+        }
       }
-      
+
       return { found: false };
     } catch (error) {
       console.error('Error searching for task:', error);
-      
+
       // Fallback: search only active tasks if completed task search fails
       try {
         const activeTasks = await this.getTasks(projectId, null);
@@ -191,7 +232,13 @@ class TodoistClient {
   }
 
   async createTask(task) {
-    return this.request('/tasks', { method: 'POST', body: task });
+    const result = await this.request('/tasks', { method: 'POST', body: task });
+
+    // Invalidate cache for the project this task was added to
+    const cacheKey = task.project_id || 'inbox';
+    taskListCache.delete(cacheKey);
+
+    return result;
   }
 }
 
@@ -224,8 +271,8 @@ export async function findTaskByDescription(token, projectId, sectionId, descrip
   return new TodoistClient(token).findTaskByDescription(projectId, sectionId, description);
 }
 
-export async function findTaskInProject(token, projectId, description) {
-  return new TodoistClient(token).findTaskInProject(projectId, description);
+export async function findTaskInProject(token, projectId, description, checkCompleted = true) {
+  return new TodoistClient(token).findTaskInProject(projectId, description, checkCompleted);
 }
 
 export async function createTask(token, payload) {

@@ -1,15 +1,27 @@
 // Background Service Worker - Immometrica to Todoist Extension
 import { getToken, getCache, setCache, getProjectConfig } from './utils/storage.js';
-import { getProjects, getSections, getLabels, createLabel, createTask, getTasks, findTaskByDescription, findTaskInProject, TodoistApiError } from './api/todoistApi.js';
+import { getProjects, getSections, getLabels, createLabel, createTask, getTasks, getCompletedTasks, findTaskByDescription, findTaskInProject, TodoistApiError } from './api/todoistApi.js';
 
 // Tab state tracking
 const tabStates = new Map(); // tabId -> { url, badgeType, isDuplicate, existingTask }
 const processingTabs = new Set(); // Track tabs currently being processed
 
+// Cache for duplicate checks - URL -> { found, type, task, timestamp }
+const duplicateCheckCache = new Map();
+const DUPLICATE_CHECK_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Pending duplicate checks to avoid parallel requests for the same URL
+const pendingDuplicateChecks = new Map(); // URL -> Promise
+
+// Debounce map for tab updates to prevent rapid successive checks
+const tabUpdateDebounceTimers = new Map(); // tabId -> timeoutId
+
 const CONFIG = {
-  PROJECT_NAME: 'Akquise', // Fallback for legacy configs  
+  PROJECT_NAME: 'Akquise', // Fallback for legacy configs
   SECTION_NAME: 'Noch nicht angefragt aber interessant', // Fallback for legacy configs
   BADGE_TIMEOUT: 3000,
+  TAB_UPDATE_DEBOUNCE: 300, // ms to wait before processing tab update
+  CHECK_COMPLETED_TASKS: true, // Set to false to skip completed task checks for better performance
 };
 
 // Enhanced badge system with better visual design
@@ -237,11 +249,62 @@ async function resolveLocationLabel(token, location) {
   }
 }
 
-// Check if task already exists for this URL
+// Check if task already exists for this URL (with caching and deduplication)
 async function checkForDuplicate(token, projectId, url) {
-  // Search entire project, not just target section
-  const searchResult = await findTaskInProject(token, projectId, url);
-  return searchResult.found ? searchResult : null; // Return the search result object if found, null if not
+  // Validate inputs
+  if (!token || !url) {
+    console.error('Invalid parameters for checkForDuplicate:', { token: !!token, url });
+    return null;
+  }
+
+  // Check cache first
+  const cached = duplicateCheckCache.get(url);
+  if (cached && (Date.now() - cached.timestamp) < DUPLICATE_CHECK_CACHE_TTL) {
+    return cached.found ? cached : null;
+  }
+
+  // Check if there's already a pending request for this URL
+  const pending = pendingDuplicateChecks.get(url);
+  if (pending) {
+    return pending;
+  }
+
+  // Create new request and cache the promise to avoid parallel requests
+  const checkPromise = (async () => {
+    try {
+      // Search entire project, not just target section
+      // Pass the config option for checking completed tasks
+      const searchResult = await findTaskInProject(token, projectId, url, CONFIG.CHECK_COMPLETED_TASKS);
+
+      // Validate search result
+      if (!searchResult || typeof searchResult.found !== 'boolean') {
+        console.error('Invalid search result:', searchResult);
+        return null;
+      }
+
+      // Cache the result
+      const cacheEntry = {
+        found: searchResult.found,
+        type: searchResult.type || null,
+        task: searchResult.task || null,
+        timestamp: Date.now()
+      };
+      duplicateCheckCache.set(url, cacheEntry);
+
+      return searchResult.found ? searchResult : null;
+    } catch (error) {
+      console.error('Error in checkForDuplicate:', error);
+      return null;
+    } finally {
+      // Remove from pending checks
+      pendingDuplicateChecks.delete(url);
+    }
+  })();
+
+  // Store pending promise
+  pendingDuplicateChecks.set(url, checkPromise);
+
+  return checkPromise;
 }
 
 // Create Todoist task from listing data
@@ -273,6 +336,9 @@ async function createListingTask({ title, url, location }) {
   }
 
   await createTask(token, taskData);
+
+  // Invalidate cache for this URL since we just created a task
+  duplicateCheckCache.delete(url);
 }
 
 // Handle extension icon click
@@ -321,41 +387,54 @@ async function handleIconClick(tab) {
   }
 }
 
-// Check page automatically when tab is updated/loaded
+// Check page automatically when tab is updated/loaded (with debouncing)
 async function handleTabUpdate(tabId, changeInfo, tab) {
   // Only process complete page loads with URLs
   if (changeInfo.status !== 'complete' || !tab.url) return;
 
-  if (isOfferUrl(tab.url)) {
-    // On ImmoMetrica offer page - check for duplicates
-    try {
-      const token = await getToken();
-      if (!token) {
-        setTabState(tabId, tab.url);
-        await updateBadgeForActiveTab();
-        return;
-      }
-      
-      const { projectId } = await resolveProjectAndSection(token);
-      const existingTask = await checkForDuplicate(token, projectId, tab.url);
-      
-      if (existingTask) {
-        // Determine badge type based on task type from search result
-        const badgeType = existingTask.type === 'COMPLETED' ? 'COMPLETED_TASK' : 'ALREADY_ADDED';
-        setTabState(tabId, tab.url, badgeType, existingTask.task);
-      } else {
-        setTabState(tabId, tab.url);
-      }
-    } catch (error) {
-      console.error('Auto-check error:', error);
-      setTabState(tabId, tab.url);
-    }
-  } else {
-    // Not on ImmoMetrica offer page - show NO_URL badge
-    setTabState(tabId, tab.url, 'NO_URL');
+  // Clear any existing debounce timer for this tab
+  const existingTimer = tabUpdateDebounceTimers.get(tabId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
   }
 
-  await updateBadgeForActiveTab();
+  // Debounce the actual check to prevent rapid successive calls
+  const timer = setTimeout(async () => {
+    tabUpdateDebounceTimers.delete(tabId);
+
+    if (isOfferUrl(tab.url)) {
+      // On ImmoMetrica offer page - check for duplicates
+      try {
+        const token = await getToken();
+        if (!token) {
+          setTabState(tabId, tab.url);
+          await updateBadgeForActiveTab();
+          return;
+        }
+
+        const { projectId } = await resolveProjectAndSection(token);
+        const existingTask = await checkForDuplicate(token, projectId, tab.url);
+
+        if (existingTask) {
+          // Determine badge type based on task type from search result
+          const badgeType = existingTask.type === 'COMPLETED' ? 'COMPLETED_TASK' : 'ALREADY_ADDED';
+          setTabState(tabId, tab.url, badgeType, existingTask.task);
+        } else {
+          setTabState(tabId, tab.url);
+        }
+      } catch (error) {
+        console.error('Auto-check error:', error);
+        setTabState(tabId, tab.url);
+      }
+    } else {
+      // Not on ImmoMetrica offer page - show NO_URL badge
+      setTabState(tabId, tab.url, 'NO_URL');
+    }
+
+    await updateBadgeForActiveTab();
+  }, CONFIG.TAB_UPDATE_DEBOUNCE);
+
+  tabUpdateDebounceTimers.set(tabId, timer);
 }
 
 // Handle tab switching (activation)
@@ -366,77 +445,249 @@ async function handleTabActivation(activeInfo) {
 // Handle tab removal (cleanup)
 async function handleTabRemoval(tabId) {
   removeTabState(tabId);
+
+  // Clean up debounce timer if exists
+  const timer = tabUpdateDebounceTimers.get(tabId);
+  if (timer) {
+    clearTimeout(timer);
+    tabUpdateDebounceTimers.delete(tabId);
+  }
+
   // No need to update badge here as the tab is being removed
 }
 
-// Handle content script messages
-async function handleMessage(message, sender) {
-  if (message.type !== 'SCRAPE_RESULT') return;
-
-  const tabId = sender.tab?.id;
-  if (!tabId) return;
-
+// Broadcast task update to all search list pages
+async function broadcastTaskUpdate(url, exists, type, task) {
   try {
-    const { valid, title, url, location } = message.payload || {};
-    
-    if (!valid) {
-      showBadge('NO_URL');
-      return;
+    // Get all tabs
+    const tabs = await chrome.tabs.query({});
+
+    // Filter for search list pages
+    const searchListTabs = tabs.filter(tab =>
+      tab.url && /^https:\/\/www\.immometrica\.com\/de\/search/.test(tab.url)
+    );
+
+    // Send update to each search list tab
+    for (const tab of searchListTabs) {
+      chrome.tabs.sendMessage(tab.id, {
+        type: 'TASK_STATUS_UPDATE',
+        payload: { url, exists, type, task }
+      }).catch(error => {
+        // Ignore errors (tab might not have content script loaded)
+        console.debug('Could not send update to tab:', tab.id, error);
+      });
     }
-
-    const token = await getToken();
-    if (!token) {
-      showBadge('NO_TOKEN');
-      return;
-    }
-
-    const { projectId, sectionId } = await resolveProjectAndSection(token);
-
-    // Show processing state
-    showBadge('PROCESSING');
-    
-    // Check for duplicate first
-    const existingTask = await checkForDuplicate(token, projectId, url);
-    if (existingTask) {
-      const badgeType = existingTask.type === 'COMPLETED' ? 'COMPLETED_TASK' : 'ALREADY_ADDED';
-      setTabState(tabId, url, badgeType, existingTask.task);
-      showBadge(badgeType, true); // Persistent badge
-      return;
-    }
-
-    await createListingTask({ title, url, location });
-    
-    // Show saved confirmation with a nice effect
-    showBadge('SAVED', false, { tabId });
-    
-    // After successful creation, update tab state and show persistent badge
-    setTimeout(async () => {
-      // Re-check to get the newly created task
-      const newTask = await checkForDuplicate(token, projectId, url);
-      if (newTask) {
-        setTabState(tabId, url, 'ALREADY_ADDED', newTask.task);
-        showBadge('ALREADY_ADDED', true, { tabId });
-      }
-    }, CONFIG.BADGE_TIMEOUT);
   } catch (error) {
-    console.error('Message handling error:', error);
-    
-    if (error instanceof TodoistApiError) {
-      showBadge(error.type === 'AUTH' ? 'AUTH' : 
-                error.type === 'NETWORK' ? 'NETWORK' : 'ERROR');
-    } else if (error.message.includes('Project')) {
-      showBadge('PROJECT');
-    } else if (error.message.includes('Section')) {
-      showBadge('SECTION');
-    } else if (error.message.includes('token')) {
-      showBadge('NO_TOKEN');
-    } else {
-      showBadge('ERROR');
-    }
-  } finally {
-    // Always clean up processing state
-    processingTabs.delete(tabId);
+    console.error('Error broadcasting task update:', error);
   }
+}
+
+// Handle content script messages
+function handleMessage(message, sender, sendResponse) {
+  // Handle cache invalidation request
+  if (message.type === 'INVALIDATE_CACHE') {
+    duplicateCheckCache.clear();
+    sendResponse({ success: true });
+    return false;
+  }
+
+  // Handle load all tasks request from search list
+  if (message.type === 'LOAD_ALL_TASKS') {
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token) {
+          sendResponse({ success: false, error: 'API token not configured' });
+          return;
+        }
+
+        const { projectId } = await resolveProjectAndSection(token);
+
+        // Load both active and completed tasks
+        const activeTasks = await getTasks(token, projectId, null);
+        const completedTasks = CONFIG.CHECK_COMPLETED_TASKS
+          ? await getCompletedTasks(token, projectId)
+          : [];
+
+        sendResponse({
+          success: true,
+          activeTasks,
+          completedTasks,
+          projectId
+        });
+      } catch (error) {
+        console.error('Error loading all tasks:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+
+    return true; // Keep message channel open for async response
+  }
+
+  // Handle status check requests from search list
+  if (message.type === 'CHECK_OFFER_STATUS') {
+    const { url } = message.payload || {};
+    if (!url) {
+      sendResponse({ exists: false });
+      return false;
+    }
+
+    // Handle async operation and keep channel open
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token) {
+          sendResponse({ exists: false });
+          return;
+        }
+
+        const { projectId } = await resolveProjectAndSection(token);
+        const existingTask = await checkForDuplicate(token, projectId, url);
+
+        if (existingTask) {
+          sendResponse({
+            exists: true,
+            type: existingTask.type,
+            task: existingTask.task
+          });
+        } else {
+          sendResponse({ exists: false });
+        }
+      } catch (error) {
+        console.error('Error checking offer status:', error);
+        sendResponse({ exists: false, error: error.message });
+      }
+    })();
+
+    return true; // Keep message channel open for async response
+  }
+
+  // Handle direct add from search list
+  if (message.type === 'SCRAPE_AND_ADD_OFFER') {
+    const { url, title, location, offerId } = message.payload || {};
+
+    // Validate required fields
+    if (!url || !title) {
+      sendResponse({ success: false, error: 'Missing required fields (url, title)' });
+      return false;
+    }
+
+    // Handle async operation and keep channel open
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token) {
+          sendResponse({ success: false, error: 'API token not configured' });
+          return;
+        }
+
+        const { projectId, sectionId } = await resolveProjectAndSection(token);
+
+        // Check for duplicates first
+        const existingTask = await checkForDuplicate(token, projectId, url);
+        if (existingTask) {
+          sendResponse({
+            success: false,
+            error: 'Task already exists',
+            exists: true,
+            type: existingTask.type
+          });
+          return;
+        }
+
+        // Create the task
+        await createListingTask({ title, url, location });
+
+        // Broadcast update
+        broadcastTaskUpdate(url, true, 'ACTIVE', null);
+
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error('Error adding offer from search list:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+
+    return true; // Keep message channel open for async response
+  }
+
+  // Handle scrape result from content script
+  if (message.type === 'SCRAPE_RESULT') {
+    const tabId = sender.tab?.id;
+    if (!tabId) return false;
+
+    // Handle async operation and keep channel open
+    (async () => {
+      try {
+        const { valid, title, url, location } = message.payload || {};
+
+        if (!valid) {
+          showBadge('NO_URL');
+          return;
+        }
+
+        const token = await getToken();
+        if (!token) {
+          showBadge('NO_TOKEN');
+          return;
+        }
+
+        const { projectId, sectionId } = await resolveProjectAndSection(token);
+
+        // Show processing state
+        showBadge('PROCESSING');
+
+        // Check for duplicate first
+        const existingTask = await checkForDuplicate(token, projectId, url);
+        if (existingTask) {
+          const badgeType = existingTask.type === 'COMPLETED' ? 'COMPLETED_TASK' : 'ALREADY_ADDED';
+          setTabState(tabId, url, badgeType, existingTask.task);
+          showBadge(badgeType, true); // Persistent badge
+          return;
+        }
+
+        await createListingTask({ title, url, location });
+
+        // Show saved confirmation with a nice effect
+        showBadge('SAVED', false, { tabId });
+
+        // After successful creation, update tab state and show persistent badge
+        setTimeout(async () => {
+          // Re-check to get the newly created task
+          const newTask = await checkForDuplicate(token, projectId, url);
+          if (newTask) {
+            setTabState(tabId, url, 'ALREADY_ADDED', newTask.task);
+            showBadge('ALREADY_ADDED', true, { tabId });
+
+            // Broadcast update to search list pages
+            broadcastTaskUpdate(url, true, 'ACTIVE', newTask.task);
+          }
+        }, CONFIG.BADGE_TIMEOUT);
+      } catch (error) {
+        console.error('Message handling error:', error);
+
+        if (error instanceof TodoistApiError) {
+          showBadge(error.type === 'AUTH' ? 'AUTH' :
+                    error.type === 'NETWORK' ? 'NETWORK' : 'ERROR');
+        } else if (error.message.includes('Project')) {
+          showBadge('PROJECT');
+        } else if (error.message.includes('Section')) {
+          showBadge('SECTION');
+        } else if (error.message.includes('token')) {
+          showBadge('NO_TOKEN');
+        } else {
+          showBadge('ERROR');
+        }
+      } finally {
+        // Always clean up processing state
+        processingTabs.delete(tabId);
+      }
+    })();
+
+    return false; // SCRAPE_RESULT doesn't need to send response
+  }
+
+  return false; // Unknown message type
 }
 
 // Event listeners
