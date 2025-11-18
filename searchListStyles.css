@@ -1,144 +1,107 @@
 /* ImmoMetrica Search List - Todoist Integration Styles */
 
-/* Column styling */
-.todoist-status-column {
-  min-width: 50px !important;
-  width: 50px !important;
-  padding: 8px 4px !important;
-  vertical-align: middle !important;
-}
-
-.todoist-status-column-header {
-  min-width: 50px !important;
-  width: 50px !important;
-  text-align: center !important;
-}
-
-/* Set consistent width for Fav column in both header and body */
+/* Fix Fav column width to accommodate status button */
 table.dataTable thead th:first-child,
 .dataTables_scrollHead table thead th:first-child,
 table.dataTable tbody td:first-child {
-  min-width: 4rem !important;
-  max-width: 4rem !important;
-  width: 4rem !important;
+  min-width: 4rem;
+  max-width: 4rem;
+  width: 4rem;
 }
 
-/* Force Fav cell to display children horizontally when it contains our status */
+/* Horizontal layout for cell contents */
 td:has(.todoist-status) {
-  white-space: nowrap !important;
+  white-space: nowrap;
 }
 
 td:has(.todoist-status) > * {
-  display: inline-block !important;
-  vertical-align: middle !important;
-  margin: 0 2px !important;
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 2px;
 }
 
-/* Status container - inline version for existing cells */
+/* Status container */
 .todoist-status {
-  display: inline-flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  vertical-align: middle !important;
-  margin-right: 4px !important;
-  min-height: 0 !important;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  vertical-align: middle;
+  margin-right: 4px;
 }
 
-/* Button styling - compact for inline display */
+/* Button base styles */
 .todoist-add-btn {
-  padding: 2px 6px !important;
-  font-size: 12px !important;
-  line-height: 1 !important;
-  border-radius: 3px !important;
-  transition: all 0.2s ease !important;
-  cursor: pointer !important;
-  border: none !important;
-  min-width: 24px !important;
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: none;
+  min-width: 24px;
 }
 
 .todoist-add-btn:not(:disabled):hover {
-  transform: scale(1.05) !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+  transform: scale(1.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .todoist-add-btn:disabled {
-  cursor: default !important;
-  opacity: 0.8 !important;
+  cursor: default;
+  opacity: 0.8;
 }
 
-/* Success state (exists in Todoist) */
+/* Button state colors */
 .todoist-add-btn.btn-success {
-  background-color: #22c55e !important;
-  color: white !important;
+  background-color: #22c55e;
+  color: white;
 }
 
-/* Completed state */
 .todoist-add-btn.btn-secondary {
-  background-color: #64748b !important;
-  color: white !important;
+  background-color: #64748b;
+  color: white;
 }
 
-/* Add button state */
 .todoist-add-btn.btn-primary {
-  background-color: #3b82f6 !important;
-  color: white !important;
+  background-color: #3b82f6;
+  color: white;
 }
 
 .todoist-add-btn.btn-primary:not(:disabled):hover {
-  background-color: #2563eb !important;
+  background-color: #2563eb;
 }
 
-/* Error state */
 .todoist-add-btn.btn-danger {
-  background-color: #ef4444 !important;
-  color: white !important;
+  background-color: #ef4444;
+  color: white;
 }
 
-/* Loading spinner - smaller for inline display */
+/* Loading spinner */
 .todoist-status .spinner-border-sm {
-  width: 0.75rem !important;
-  height: 0.75rem !important;
-  border-width: 0.12em !important;
-  color: #6b7280 !important;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-width: 0.12em;
+  color: #6b7280;
 }
 
 .todoist-add-btn .spinner-border-sm {
-  color: white !important;
+  color: white;
 }
 
-/* Icon sizing - smaller for inline display */
-.todoist-add-btn i,
-.todoist-status-column-header i {
-  font-size: 11px !important;
-}
-
-/* Ensure column doesn't wrap */
-.todoist-status-column,
-.todoist-status-column-header {
-  white-space: nowrap !important;
-}
-
-/* DataTables-specific adjustments */
-table.dataTable .todoist-status-column {
-  padding-left: 8px !important;
-  padding-right: 8px !important;
+/* Icon sizing */
+.todoist-add-btn i {
+  font-size: 11px;
 }
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-  .todoist-status-column,
-  .todoist-status-column-header {
-    min-width: 40px !important;
-    width: 40px !important;
-  }
-
   .todoist-add-btn {
-    padding: 2px 6px !important;
-    font-size: 12px !important;
-    min-width: 28px !important;
+    padding: 2px 6px;
+    font-size: 12px;
+    min-width: 28px;
   }
 
   .todoist-add-btn i {
-    font-size: 12px !important;
+    font-size: 12px;
   }
 }
