@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ImmoMetrica → Todoist",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "Add ImmoMetrica property listings to Todoist with location labels and search list integration",
 
   "action": {
@@ -15,7 +15,7 @@
 
   "content_scripts": [
     {
-      "matches": ["https://www.immometrica.com/de/search*"],
+      "matches": ["https://www.immometrica.com/de/v2/search*"],
       "js": ["searchListContent.js"],
       "css": ["searchListStyles.css"],
       "run_at": "document_idle"

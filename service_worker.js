@@ -87,7 +87,7 @@ const updateBadgeForActiveTab = async () => {
 };
 
 // URL validation
-const isOfferUrl = (url) => /^https:\/\/www\.immometrica\.com\/de\/offer\/\d+/.test(url);
+const isOfferUrl = (url) => /^https:\/\/www\.immometrica\.com\/de\/v2\/offer\/\d+/.test(url);
 
 // Project/section resolution
 const resolveProjectAndSection = async (token) => {
@@ -262,7 +262,7 @@ const broadcastTaskUpdate = async (url, exists, type, task) => {
   try {
     const tabs = await chrome.tabs.query({});
     const searchListTabs = tabs.filter(tab =>
-      tab.url?.match(/^https:\/\/www\.immometrica\.com\/de\/search/)
+      tab.url?.match(/^https:\/\/www\.immometrica\.com\/de\/v2\/search/)
     );
 
     for (const tab of searchListTabs) {

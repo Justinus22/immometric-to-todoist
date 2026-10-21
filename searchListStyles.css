@@ -1,107 +1,95 @@
-/* ImmoMetrica Search List - Todoist Integration Styles */
+/* ImmoMetrica Search List - Todoist Integration Styles (v2 UI) */
 
-/* Fix Fav column width to accommodate status button */
-table.dataTable thead th:first-child,
-.dataTables_scrollHead table thead th:first-child,
-table.dataTable tbody td:first-child {
-  min-width: 4rem;
-  max-width: 4rem;
-  width: 4rem;
-}
-
-/* Horizontal layout for cell contents */
-td:has(.todoist-status) {
-  white-space: nowrap;
-}
-
-td:has(.todoist-status) > * {
-  display: inline-block;
+/* Our injected column: same width and padding as the existing icon cells */
+.todoist-col {
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  padding: 0 !important;
+  text-align: center;
   vertical-align: middle;
-  margin: 0 2px;
 }
 
-/* Status container */
+/* Container inside the cell */
 .todoist-status {
   display: inline-flex;
-  justify-content: center;
   align-items: center;
-  vertical-align: middle;
-  margin-right: 4px;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
 }
 
-/* Button base styles */
+/* Button: visually matches .row-star (the fav button in v2) */
 .todoist-add-btn {
-  padding: 2px 6px;
-  font-size: 12px;
-  line-height: 1;
-  border-radius: 3px;
-  transition: all 0.2s ease;
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
   border: none;
-  min-width: 24px;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  color: #9ca3af; /* neutral grey — same starting colour as row-star */
+  flex-shrink: 0;
 }
 
 .todoist-add-btn:not(:disabled):hover {
-  transform: scale(1.05);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  background-color: rgba(0, 0, 0, 0.06);
 }
 
 .todoist-add-btn:disabled {
   cursor: default;
-  opacity: 0.8;
+  opacity: 0.5;
 }
 
-/* Button state colors */
-.todoist-add-btn.btn-success {
-  background-color: #22c55e;
-  color: white;
+/* State colours */
+.todoist-btn--exists {
+  color: #22c55e; /* green — active task */
 }
 
-.todoist-add-btn.btn-secondary {
-  background-color: #64748b;
-  color: white;
+.todoist-btn--exists:not(:disabled):hover {
+  color: #16a34a;
+  background-color: rgba(34, 197, 94, 0.1);
 }
 
-.todoist-add-btn.btn-primary {
-  background-color: #3b82f6;
-  color: white;
+.todoist-btn--completed {
+  color: #64748b; /* slate — completed task */
 }
 
-.todoist-add-btn.btn-primary:not(:disabled):hover {
-  background-color: #2563eb;
+.todoist-btn--completed:not(:disabled):hover {
+  color: #475569;
+  background-color: rgba(100, 116, 139, 0.1);
 }
 
-.todoist-add-btn.btn-danger {
-  background-color: #ef4444;
-  color: white;
+.todoist-btn--not_found {
+  color: #9ca3af; /* neutral — not yet added */
 }
 
-/* Loading spinner */
-.todoist-status .spinner-border-sm {
-  width: 0.75rem;
-  height: 0.75rem;
-  border-width: 0.12em;
-  color: #6b7280;
+.todoist-btn--not_found:not(:disabled):hover {
+  color: #db4035; /* Todoist red on hover to invite action */
+  background-color: rgba(219, 64, 53, 0.1);
 }
 
-.todoist-add-btn .spinner-border-sm {
-  color: white;
+.todoist-btn--error {
+  color: #ef4444;
+  opacity: 0.7;
 }
 
-/* Icon sizing */
-.todoist-add-btn i {
-  font-size: 11px;
+/* Loading spinner — inline, no Bootstrap dependency */
+.todoist-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #d1d5db;
+  border-top-color: #6b7280;
+  border-radius: 50%;
+  animation: todoist-spin 0.6s linear infinite;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .todoist-add-btn {
-    padding: 2px 6px;
-    font-size: 12px;
-    min-width: 28px;
-  }
-
-  .todoist-add-btn i {
-    font-size: 12px;
-  }
+@keyframes todoist-spin {
+  to { transform: rotate(360deg); }
 }

@@ -1,16 +1,14 @@
-// ImmoMetrica Search List - Todoist Integration
+// ImmoMetrica Search List - Todoist Integration (v2 UI)
 (() => {
   'use strict';
 
-  // Configuration
   const CONFIG = {
-    TABLE_SELECTOR: '#offertable',
-    TABLE_WAIT_INTERVAL: 500,
-    TABLE_WAIT_TIMEOUT: 10000,
     BATCH_SIZE: 3,
     BATCH_DELAY: 200,
     MUTATION_DEBOUNCE: 500,
-    CACHE_TTL: 5 * 60 * 1000, // 5 minutes
+    CACHE_TTL: 5 * 60 * 1000,
+    TABLE_WAIT_INTERVAL: 500,
+    TABLE_WAIT_TIMEOUT: 15000,
   };
 
   const CSS_CLASSES = {
@@ -40,65 +38,53 @@
   const statusCheckCache = new Map();
   const pendingStatusChecks = new Map();
 
-  // Utility functions
-  const isSearchPage = () => /^https:\/\/www\.immometrica\.com\/de\/search/.test(window.location.href);
-  const buildOfferUrl = (offerId) => `https://www.immometrica.com/de/offer/${offerId}`;
+  // URL helpers — v2 paths
+  const isSearchPage = () => /^https:\/\/www\.immometrica\.com\/de\/v2\/search/.test(window.location.href);
+  const buildOfferUrl = (offerId) => `https://www.immometrica.com/de/v2/offer/${offerId}`;
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   const safeQuerySelector = (parent, selector) => {
-    try {
-      return parent.querySelector(selector);
-    } catch (error) {
-      console.error(`Error querying selector "${selector}":`, error);
-      return null;
-    }
+    try { return parent.querySelector(selector); }
+    catch (e) { return null; }
   };
 
   const safeQuerySelectorAll = (parent, selector) => {
-    try {
-      return parent.querySelectorAll(selector);
-    } catch (error) {
-      console.error(`Error querying selector "${selector}":`, error);
-      return [];
-    }
+    try { return parent.querySelectorAll(selector); }
+    catch (e) { return []; }
   };
 
-  // Extract offer ID from table row
+  // Extract offer ID from a search result row.
+  // In the v2 UI, the first icon TD contains a <form action="/de/v2/search/offers/<id>/favorite">.
   const extractOfferIdFromRow = (row) => {
     if (!row) return null;
 
-    // Try data-id attribute on favorite icon
-    const favoriteIcon = safeQuerySelector(row, '[data-id]');
-    if (favoriteIcon) {
-      const offerId = favoriteIcon.getAttribute('data-id');
-      if (offerId && /^\d+$/.test(offerId)) return offerId;
+    // Primary: form action in the first icon cell
+    const form = safeQuerySelector(row, 'form[action*="/offers/"]');
+    if (form) {
+      const match = form.getAttribute('action')?.match(/\/offers\/(\d+)\//);
+      if (match?.[1]) return match[1];
     }
 
-    // Fallback: extract from link href
-    const link = safeQuerySelector(row, 'a[href*="/de/offer/"]');
+    // Fallback: any link pointing to a v2 offer
+    const link = safeQuerySelector(row, 'a[href*="/de/v2/offer/"]');
     if (link) {
-      const match = link.href.match(/\/de\/offer\/(\d+)/);
+      const match = link.href.match(/\/de\/v2\/offer\/(\d+)/);
       if (match?.[1]) return match[1];
     }
 
     return null;
   };
 
-  // Message communication
-  const sendMessageWithTimeout = (message, timeout = 5000) => {
-    return new Promise((resolve, reject) => {
+  // Messaging
+  const sendMessageWithTimeout = (message, timeout = 5000) =>
+    new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Message timeout')), timeout);
-
       chrome.runtime.sendMessage(message, (response) => {
         clearTimeout(timer);
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve(response);
-        }
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(response);
       });
     });
-  };
 
   // Cache management
   const invalidateTaskCache = () => {
@@ -110,18 +96,13 @@
   const invalidateBackgroundCache = async () => {
     try {
       await sendMessageWithTimeout({ type: MESSAGE_TYPES.INVALIDATE_CACHE }, 3000);
-    } catch (error) {
-      console.error('Error invalidating background cache:', error);
-    }
+    } catch (e) { /* ignore */ }
   };
 
-  // Load all tasks for the page
   const loadAllTasks = async (forceRefresh = false) => {
     if (!forceRefresh && allTasksCache) {
-      const age = Date.now() - allTasksCache.timestamp;
-      if (age < CONFIG.CACHE_TTL) return allTasksCache;
+      if (Date.now() - allTasksCache.timestamp < CONFIG.CACHE_TTL) return allTasksCache;
     }
-
     if (taskCachePromise) return taskCachePromise;
 
     taskCachePromise = (async () => {
@@ -130,37 +111,25 @@
           { type: MESSAGE_TYPES.LOAD_ALL_TASKS, payload: {} },
           15000
         );
-
-        if (!response?.success) {
-          throw new Error(response?.error || 'Failed to load tasks');
-        }
-
+        if (!response?.success) throw new Error(response?.error || 'Failed to load tasks');
         allTasksCache = {
           activeTasks: response.activeTasks || [],
           completedTasks: response.completedTasks || [],
           timestamp: Date.now(),
           projectId: response.projectId,
         };
-
         return allTasksCache;
-      } catch (error) {
-        console.error('Error loading tasks:', error);
-        allTasksCache = {
-          activeTasks: [],
-          completedTasks: [],
-          timestamp: Date.now(),
-          projectId: null,
-        };
+      } catch (e) {
+        console.error('Error loading tasks:', e);
+        allTasksCache = { activeTasks: [], completedTasks: [], timestamp: Date.now(), projectId: null };
         return allTasksCache;
       } finally {
         taskCachePromise = null;
       }
     })();
-
     return taskCachePromise;
   };
 
-  // Check offer status using cached tasks
   const checkOfferStatus = async (offerId) => {
     const cached = statusCheckCache.get(offerId);
     if (cached) return cached;
@@ -175,20 +144,14 @@
 
         const offerUrl = buildOfferUrl(offerId);
 
-        const activeTask = taskCache.activeTasks.find(task =>
-          task.description?.includes(offerUrl)
-        );
-
+        const activeTask = taskCache.activeTasks.find(t => t.description?.includes(offerUrl));
         if (activeTask) {
           const result = { status: STATUS.EXISTS, task: activeTask };
           statusCheckCache.set(offerId, result);
           return result;
         }
 
-        const completedTask = taskCache.completedTasks.find(task =>
-          task.description?.includes(offerUrl)
-        );
-
+        const completedTask = taskCache.completedTasks.find(t => t.description?.includes(offerUrl));
         if (completedTask) {
           const result = { status: STATUS.COMPLETED, task: completedTask };
           statusCheckCache.set(offerId, result);
@@ -198,8 +161,8 @@
         const result = { status: STATUS.NOT_FOUND, task: null };
         statusCheckCache.set(offerId, result);
         return result;
-      } catch (error) {
-        console.error(`Error checking status for offer ${offerId}:`, error);
+      } catch (e) {
+        console.error(`Error checking status for offer ${offerId}:`, e);
         return { status: STATUS.ERROR, task: null };
       } finally {
         pendingStatusChecks.delete(offerId);
@@ -210,205 +173,194 @@
     return checkPromise;
   };
 
-  // UI creation
-  const createStatusIndicator = (offerId) => {
+  // --- UI ---
+
+  // Create the status button container for a given offerId
+  const createStatusContainer = (offerId) => {
     const container = document.createElement('span');
     container.className = CSS_CLASSES.STATUS_CONTAINER;
     container.setAttribute('data-offer-id', offerId);
     container.setAttribute('data-status', STATUS.LOADING);
-    container.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-label="Loading"></span>';
+    container.innerHTML = '<span class="todoist-spinner" role="status" aria-label="Loading"></span>';
     return container;
   };
 
-  const createButton = (className, icon, title) => {
-    const button = document.createElement('button');
-    button.className = `${CSS_CLASSES.BUTTON} btn btn-sm ${className}`;
-    button.title = title;
-    button.setAttribute('aria-label', title);
-
-    if (icon.startsWith('spinner')) {
-      button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
-      button.disabled = true;
-    } else {
-      button.innerHTML = `<i class="${icon}"></i>`;
-    }
-
-    return button;
-  };
-
-  // Update status UI
-  const updateCellStatus = (containerOrCell, status, taskData = null) => {
-    if (!containerOrCell) return;
-
-    const statusDiv = containerOrCell.classList?.contains(CSS_CLASSES.STATUS_CONTAINER)
-      ? containerOrCell
-      : safeQuerySelector(containerOrCell, `.${CSS_CLASSES.STATUS_CONTAINER}`);
-
-    if (!statusDiv) return;
-
-    statusDiv.setAttribute('data-status', status);
-    statusDiv.innerHTML = '';
-
+  const updateCellStatus = (container, status, taskData = null) => {
+    if (!container) return;
+    container.setAttribute('data-status', status);
     if (taskData) {
-      statusDiv.setAttribute('data-task-id', taskData.id || '');
-      statusDiv.setAttribute('data-task-url', taskData.url || '');
+      container.setAttribute('data-task-id', taskData.id || '');
+      container.setAttribute('data-task-url', taskData.url || '');
+    }
+    container.innerHTML = '';
+
+    if (status === STATUS.LOADING) {
+      container.innerHTML = '<span class="todoist-spinner" role="status"></span>';
+      return;
     }
 
-    let button;
+    const btn = document.createElement('button');
+    btn.className = `${CSS_CLASSES.BUTTON} todoist-btn--${status}`;
+    btn.type = 'button';
 
     switch (status) {
-      case STATUS.LOADING:
-        statusDiv.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
-        break;
-
       case STATUS.EXISTS:
-        button = createButton('btn-success', 'fas fa-check', 'View in Todoist');
-        button.addEventListener('click', () => handleTaskClick(statusDiv), { once: true });
-        statusDiv.appendChild(button);
+        btn.title = 'In Todoist vorhanden – klicken zum Öffnen';
+        btn.setAttribute('aria-label', 'In Todoist vorhanden');
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd"/></svg>';
+        btn.addEventListener('click', () => handleTaskClick(container), { once: true });
         break;
-
       case STATUS.COMPLETED:
-        button = createButton('btn-secondary', 'fas fa-check-circle', 'View in Todoist');
-        button.addEventListener('click', () => handleTaskClick(statusDiv), { once: true });
-        statusDiv.appendChild(button);
+        btn.title = 'In Todoist abgeschlossen – klicken zum Öffnen';
+        btn.setAttribute('aria-label', 'In Todoist abgeschlossen');
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>';
+        btn.addEventListener('click', () => handleTaskClick(container), { once: true });
         break;
-
       case STATUS.NOT_FOUND:
-        button = createButton('btn-primary', 'fas fa-external-link-alt', 'View details to add');
-        button.addEventListener('click', () => handleViewClick(statusDiv), { once: true });
-        statusDiv.appendChild(button);
+        btn.title = 'Noch nicht in Todoist – Objekt öffnen zum Hinzufügen';
+        btn.setAttribute('aria-label', 'Nicht in Todoist');
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"/></svg>';
+        btn.addEventListener('click', () => handleViewClick(container), { once: true });
         break;
-
       case STATUS.ERROR:
-        button = createButton('btn-danger', 'fas fa-exclamation-triangle', 'Error checking status');
-        button.disabled = true;
-        statusDiv.appendChild(button);
+        btn.title = 'Fehler beim Abrufen des Status';
+        btn.setAttribute('aria-label', 'Fehler');
+        btn.disabled = true;
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>';
         break;
     }
+
+    container.appendChild(btn);
   };
 
-  // Click handlers
-  const handleViewClick = (cell) => {
-    const offerId = cell.getAttribute('data-offer-id');
+  const handleViewClick = (container) => {
+    const offerId = container.getAttribute('data-offer-id');
     if (offerId) window.open(buildOfferUrl(offerId), '_blank');
   };
 
-  const handleTaskClick = (cell) => {
-    const taskUrl = cell.getAttribute('data-task-url');
-    const taskId = cell.getAttribute('data-task-id');
-
-    if (taskUrl) {
-      window.open(taskUrl, '_blank');
-    } else if (taskId) {
-      window.open(`https://todoist.com/app/task/${taskId}`, '_blank');
-    }
+  const handleTaskClick = (container) => {
+    const taskUrl = container.getAttribute('data-task-url');
+    const taskId = container.getAttribute('data-task-id');
+    if (taskUrl) window.open(taskUrl, '_blank');
+    else if (taskId) window.open(`https://todoist.com/app/task/${taskId}`, '_blank');
   };
 
-  // Row processing
+  // Find the injection target for a row: the TD that contains the fav button.
+  // In v2: first icon TD has class "table-sticky-0 table-col-icon" and holds the fav form.
+  // We insert a new <td> BEFORE that first icon TD.
+  const getInjectionTarget = (row) => {
+    // Look for the fav button cell by form presence or class
+    const favCell = safeQuerySelector(row, 'td.table-sticky-0')
+      || safeQuerySelector(row, 'td.table-col-icon');
+    return favCell || null;
+  };
+
   const processRow = async (row) => {
     if (!row) return;
-
-    const favCell = safeQuerySelector(row, 'td:first-child');
-    if (!favCell) return;
-
-    if (safeQuerySelector(favCell, `.${CSS_CLASSES.STATUS_CONTAINER}`)) return;
+    // Skip if already injected
+    if (safeQuerySelector(row, `.${CSS_CLASSES.STATUS_CONTAINER}`)) return;
 
     const offerId = extractOfferIdFromRow(row);
     if (!offerId) return;
 
-    const statusIndicator = createStatusIndicator(offerId);
-    favCell.insertBefore(statusIndicator, favCell.firstChild);
+    const favCell = getInjectionTarget(row);
+    if (!favCell) return;
+
+    // Create a new TD for our button, inserted before the fav cell
+    const ourCell = document.createElement('td');
+    ourCell.className = 'table-cell table-left table-col-icon todoist-col';
+    const container = createStatusContainer(offerId);
+    ourCell.appendChild(container);
+    row.insertBefore(ourCell, favCell);
 
     try {
       const result = await checkOfferStatus(offerId);
-      updateCellStatus(statusIndicator, result.status, result.task);
-    } catch (error) {
-      console.error(`Error processing row for offer ${offerId}:`, error);
-      updateCellStatus(statusIndicator, STATUS.ERROR);
+      updateCellStatus(container, result.status, result.task);
+    } catch (e) {
+      console.error(`Error processing row for offer ${offerId}:`, e);
+      updateCellStatus(container, STATUS.ERROR);
     }
   };
 
+  // Find all result rows in the v2 search table
+  const getResultRows = () => {
+    // v2 uses tr[data-result-row] or data-testid="v2-result-row"
+    const rows = safeQuerySelectorAll(document, 'tr[data-result-row]');
+    if (rows.length) return Array.from(rows);
+    return Array.from(safeQuerySelectorAll(document, '[data-testid="v2-result-row"]'));
+  };
+
   const processAllRows = async () => {
-    const table = safeQuerySelector(document, CONFIG.TABLE_SELECTOR);
-    if (!table) return;
-
-    const tbody = safeQuerySelector(table, 'tbody');
-    if (!tbody) return;
-
-    const rows = safeQuerySelectorAll(tbody, 'tr[role="row"]');
+    const rows = getResultRows();
     if (!rows.length) return;
 
     for (let i = 0; i < rows.length; i += CONFIG.BATCH_SIZE) {
-      const batch = Array.from(rows).slice(i, i + CONFIG.BATCH_SIZE);
+      const batch = rows.slice(i, i + CONFIG.BATCH_SIZE);
       await Promise.allSettled(batch.map(row => processRow(row)));
-
-      if (i + CONFIG.BATCH_SIZE < rows.length) {
-        await delay(CONFIG.BATCH_DELAY);
-      }
+      if (i + CONFIG.BATCH_SIZE < rows.length) await delay(CONFIG.BATCH_DELAY);
     }
   };
 
   const debouncedProcessAllRows = () => {
     if (processingDebounceTimer) clearTimeout(processingDebounceTimer);
-
     processingDebounceTimer = setTimeout(() => {
       processAllRows();
       processingDebounceTimer = null;
     }, CONFIG.MUTATION_DEBOUNCE);
   };
 
-  // Table observation
+  // Observe tbody for new rows (pagination / lazy load)
   const setupTableObserver = () => {
-    const tbody = safeQuerySelector(document, `${CONFIG.TABLE_SELECTOR} tbody`);
-    if (!tbody) return;
+    // In v2, rows are in a plain tbody — watch document body if no explicit table id
+    const tbody = safeQuerySelector(document, 'tbody')
+      || safeQuerySelector(document, '[data-testid="v2-search-results"]')
+      || document.body;
 
     if (tableObserver) tableObserver.disconnect();
 
     tableObserver = new MutationObserver((mutations) => {
-      const hasNewRows = mutations.some(mutation =>
-        mutation.type === 'childList' &&
-        Array.from(mutation.addedNodes).some(node =>
-          node.nodeType === Node.ELEMENT_NODE && node.tagName === 'TR'
+      const hasNewRows = mutations.some(m =>
+        m.type === 'childList' &&
+        Array.from(m.addedNodes).some(n =>
+          n.nodeType === Node.ELEMENT_NODE && (
+            n.hasAttribute('data-result-row') ||
+            n.getAttribute('data-testid') === 'v2-result-row' ||
+            n.tagName === 'TR'
+          )
         )
       );
-
       if (hasNewRows) debouncedProcessAllRows();
     });
 
-    tableObserver.observe(tbody, { childList: true, subtree: false });
+    tableObserver.observe(tbody, { childList: true, subtree: true });
   };
 
-  // Message handling
+  // Handle status pushes from the service worker
   const handleBackgroundMessage = (message) => {
-    if (!message?.type) return;
+    if (message?.type !== MESSAGE_TYPES.TASK_STATUS_UPDATE) return;
+    const { url, exists, type } = message.payload || {};
+    if (!url) return;
 
-    if (message.type === MESSAGE_TYPES.TASK_STATUS_UPDATE) {
-      const { url, exists, type } = message.payload || {};
-      if (!url) return;
+    // v2 URL pattern for matching
+    const match = url.match(/\/de\/v2\/offer\/(\d+)/);
+    if (!match) return;
 
-      const match = url.match(/\/de\/offer\/(\d+)/);
-      if (!match) return;
+    const offerId = match[1];
+    statusCheckCache.delete(offerId);
 
-      const offerId = match[1];
-      statusCheckCache.delete(offerId);
-
-      const statusContainer = safeQuerySelector(
-        document,
-        `.${CSS_CLASSES.STATUS_CONTAINER}[data-offer-id="${offerId}"]`
-      );
-
-      if (statusContainer) {
-        const status = exists
-          ? (type === 'COMPLETED' ? STATUS.COMPLETED : STATUS.EXISTS)
-          : STATUS.NOT_FOUND;
-
-        const taskData = message.payload?.task || null;
-        updateCellStatus(statusContainer, status, taskData);
-      }
+    const container = safeQuerySelector(
+      document,
+      `.${CSS_CLASSES.STATUS_CONTAINER}[data-offer-id="${offerId}"]`
+    );
+    if (container) {
+      const status = exists
+        ? (type === 'COMPLETED' ? STATUS.COMPLETED : STATUS.EXISTS)
+        : STATUS.NOT_FOUND;
+      updateCellStatus(container, status, message.payload?.task || null);
     }
   };
 
-  // Initialization
+  // Initialization: poll until rows are present
   const initialize = async () => {
     if (!isSearchPage()) return;
 
@@ -418,40 +370,29 @@
     let attempts = 0;
     const maxAttempts = CONFIG.TABLE_WAIT_TIMEOUT / CONFIG.TABLE_WAIT_INTERVAL;
 
-    const waitForTable = setInterval(() => {
+    const waitForRows = setInterval(() => {
       attempts++;
-
-      const table = safeQuerySelector(document, CONFIG.TABLE_SELECTOR);
-      const hasRows = table && safeQuerySelector(table, 'tbody tr');
-
-      if (hasRows) {
-        clearInterval(waitForTable);
+      const rows = getResultRows();
+      if (rows.length) {
+        clearInterval(waitForRows);
         processAllRows();
         setupTableObserver();
       } else if (attempts >= maxAttempts) {
-        clearInterval(waitForTable);
-        console.warn('Table not found within timeout period');
+        clearInterval(waitForRows);
+        console.warn('[Todoist] Search result rows not found within timeout');
       }
     }, CONFIG.TABLE_WAIT_INTERVAL);
   };
 
-  // Cleanup
   const cleanup = () => {
-    if (tableObserver) {
-      tableObserver.disconnect();
-      tableObserver = null;
-    }
-    if (processingDebounceTimer) {
-      clearTimeout(processingDebounceTimer);
-      processingDebounceTimer = null;
-    }
+    if (tableObserver) { tableObserver.disconnect(); tableObserver = null; }
+    if (processingDebounceTimer) { clearTimeout(processingDebounceTimer); processingDebounceTimer = null; }
     allTasksCache = null;
     taskCachePromise = null;
     statusCheckCache.clear();
     pendingStatusChecks.clear();
   };
 
-  // Event listeners
   chrome.runtime.onMessage.addListener(handleBackgroundMessage);
   window.addEventListener('beforeunload', cleanup);
 
@@ -463,6 +404,5 @@
     }
   });
 
-  // Start
   initialize();
 })();
