@@ -255,6 +255,23 @@
     return favCell || null;
   };
 
+  // Inject a matching <th> into the thead so the header stays aligned with body columns.
+  // Called once before the first batch of rows is processed.
+  const injectTheadColumn = () => {
+    const theadRow = safeQuerySelector(document, 'thead tr');
+    if (!theadRow) return;
+    // Skip if already injected
+    if (safeQuerySelector(theadRow, 'th.todoist-col')) return;
+    const favTh = safeQuerySelector(theadRow, 'th.table-sticky-0')
+      || safeQuerySelector(theadRow, 'th.table-col-icon');
+    if (!favTh) return;
+    const th = document.createElement('th');
+    th.scope = 'col';
+    th.className = 'table-th table-left table-col-icon todoist-col';
+    th.setAttribute('aria-label', 'Todoist');
+    theadRow.insertBefore(th, favTh);
+  };
+
   const processRow = async (row) => {
     if (!row) return;
     // Skip if already injected
@@ -293,6 +310,8 @@
   const processAllRows = async () => {
     const rows = getResultRows();
     if (!rows.length) return;
+
+    injectTheadColumn();
 
     for (let i = 0; i < rows.length; i += CONFIG.BATCH_SIZE) {
       const batch = rows.slice(i, i + CONFIG.BATCH_SIZE);
